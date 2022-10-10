@@ -6,7 +6,7 @@ wrapperClassName: docusaurus-markdown-example
 
 # Markdown page tests
 
-This is a page generated from markdown to illustrate the Markdown page feature and test some edge cases.
+This is a page generated from Markdown to illustrate the Markdown page feature and test some edge cases.
 
 :::info
 
@@ -160,7 +160,17 @@ function Clock(props) {
 }
 ```
 
-## Custom heading id {#custom}
+## Custom heading ID {#custom}
+
+### Weird heading {#你好}
+
+### Weird heading {#2022.1.1}
+
+### Weird heading {#a#b}
+
+### Weird heading {#a b}
+
+### Weird heading {#a{b}
 
 ## Pipe
 
@@ -175,3 +185,63 @@ Code tag + double pipe: <code>||</code>
 ![](/4/图片.png)
 
 ![](/4/docu.png)
+
+## Details
+
+<details>
+
+Details without a summary
+
+</details>
+
+This is a fragment:
+
+<>Hello</>
+
+It should work :)
+
+## Task list
+
+A list:
+
+- [ ] Simple
+- [x] Tasks
+- [ ] Has simple
+- [ ] Styles
+
+Another list:
+
+- Nested
+  - [ ] Tasks
+  - [ ] Should be well-formatted
+- [ ] No matter
+- [ ] How weird
+
+Can be arbitrarily nested:
+
+- Level
+  - [ ] Task
+  - [ ] Task
+  - Another level
+    - [ ] Task
+    - [ ] Task
+    - Deeper
+      - [ ] Task
+      - [ ] Task
+    - [ ] Task
+    - [ ] Task
+- [ ] Task
+
+## Admonitions
+
+:::caution Interpolated `title` with a <button style={{color: "red"}} onClick={() => alert("it works")}>button</button>
+
+Admonition body
+
+:::
+
+:::important
+
+Admonition alias `:::important` should have Important title
+
+:::

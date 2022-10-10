@@ -5,20 +5,22 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import {jest} from '@jest/globals';
 import {
   ConfigSchema,
   DEFAULT_CONFIG,
   validateConfig,
 } from '../configValidation';
-import type {DocusaurusConfig} from '@docusaurus/types';
+import type {Config} from '@docusaurus/types';
 
-const baseConfig: DocusaurusConfig = {
+const baseConfig = {
   baseUrl: '/',
   title: 'my site',
   url: 'https://mysite.com',
-};
+} as Config;
 
-const normalizeConfig = (config) => validateConfig({...baseConfig, ...config});
+const normalizeConfig = (config: Partial<Config>) =>
+  validateConfig({...baseConfig, ...config}, 'docusaurus.config.js');
 
 describe('normalizeConfig', () => {
   it('normalizes empty config', () => {
@@ -37,6 +39,7 @@ describe('normalizeConfig', () => {
       organizationName: 'facebook',
       projectName: 'docusaurus',
       githubHost: 'github.com',
+      githubPort: '8000',
       customFields: {
         myCustomField: '42',
       },
@@ -78,17 +81,85 @@ describe('normalizeConfig', () => {
   it('throws error for unknown field', () => {
     expect(() => {
       normalizeConfig({
+        // @ts-expect-error: test
         invalid: true,
       });
     }).toThrowErrorMatchingSnapshot();
   });
 
-  it('throws error for baseUrl without trailing `/`', () => {
-    expect(() => {
+  it('throws for non-string URLs', () => {
+    expect(() =>
+      normalizeConfig({
+        // @ts-expect-error: test
+        url: 1,
+      }),
+    ).toThrowErrorMatchingInlineSnapshot(`
+      ""url" must be a string
+      "
+    `);
+  });
+
+  it('throws for invalid URL', () => {
+    expect(() =>
+      normalizeConfig({
+        url: 'mysite.com',
+      }),
+    ).toThrowErrorMatchingInlineSnapshot(`
+      ""mysite.com" does not look like a valid URL. Make sure it has a protocol; for example, "https://example.com".
+      "
+    `);
+  });
+
+  it('normalizes various URLs', () => {
+    const consoleMock = jest
+      .spyOn(console, 'warn')
+      .mockImplementation(() => {});
+
+    expect(
+      normalizeConfig({
+        url: 'https://mysite.com/',
+      }).url,
+    ).toBe('https://mysite.com');
+    expect(
+      normalizeConfig({
+        // This shouldn't happen
+        url: 'https://mysite.com/foo/',
+      }).url,
+    ).toBe('https://mysite.com/foo');
+
+    expect(consoleMock.mock.calls[0][0]).toMatchInlineSnapshot(
+      `"[WARNING] Docusaurus config validation warning. Field "url": The url is not supposed to contain a sub-path like '/foo/'. Please use the baseUrl field for sub-paths."`,
+    );
+  });
+
+  it('throws for non-string base URLs', () => {
+    expect(() =>
+      normalizeConfig({
+        // @ts-expect-error: test
+        baseUrl: 1,
+      }),
+    ).toThrowErrorMatchingInlineSnapshot(`
+      ""baseUrl" must be a string
+      "
+    `);
+  });
+
+  it('normalizes various base URLs', () => {
+    expect(
       normalizeConfig({
         baseUrl: 'noSlash',
-      });
-    }).toThrowErrorMatchingSnapshot();
+      }).baseUrl,
+    ).toBe('/noSlash/');
+    expect(
+      normalizeConfig({
+        baseUrl: '/noSlash',
+      }).baseUrl,
+    ).toBe('/noSlash/');
+    expect(
+      normalizeConfig({
+        baseUrl: 'noSlash/foo',
+      }).baseUrl,
+    ).toBe('/noSlash/foo/');
   });
 
   it.each([
@@ -112,6 +183,7 @@ describe('normalizeConfig', () => {
   ])(`%s for the input of: %p`, (_message, plugins) => {
     expect(() => {
       normalizeConfig({
+        // @ts-expect-error: test
         plugins,
       });
     }).toThrowErrorMatchingSnapshot();
@@ -138,6 +210,7 @@ describe('normalizeConfig', () => {
   ])(`%s for the input of: %p`, (_message, themes) => {
     expect(() => {
       normalizeConfig({
+        // @ts-expect-error: test
         themes,
       });
     }).toThrowErrorMatchingSnapshot();
@@ -173,13 +246,13 @@ describe('normalizeConfig', () => {
       'should accept [function, object] for plugin',
       [[() => {}, {it: 'should work'}]],
     ],
-    ['should accept false/null for plugin', [false, null, 'classic']],
+    ['should accept false/null for plugin', [false as const, null, 'classic']],
   ])(`%s for the input of: %p`, (_message, plugins) => {
     expect(() => {
       normalizeConfig({
         plugins,
-      });
-    }).not.toThrowError();
+      } as Config);
+    }).not.toThrow();
   });
 
   it.each([
@@ -217,13 +290,14 @@ describe('normalizeConfig', () => {
     expect(() => {
       normalizeConfig({
         themes,
-      });
-    }).not.toThrowError();
+      } as Config);
+    }).not.toThrow();
   });
 
   it('throws error if themes is not array', () => {
     expect(() => {
       normalizeConfig({
+        // @ts-expect-error: test
         themes: {},
       });
     }).toThrowErrorMatchingInlineSnapshot(`
@@ -235,6 +309,7 @@ describe('normalizeConfig', () => {
   it('throws error if presets is not array', () => {
     expect(() => {
       normalizeConfig({
+        // @ts-expect-error: test
         presets: {},
       });
     }).toThrowErrorMatchingInlineSnapshot(`
@@ -246,6 +321,7 @@ describe('normalizeConfig', () => {
   it('throws error if presets looks invalid', () => {
     expect(() => {
       normalizeConfig({
+        // @ts-expect-error: test
         presets: [() => {}],
       });
     }).toThrowErrorMatchingInlineSnapshot(`
@@ -287,15 +363,31 @@ describe('normalizeConfig', () => {
   });
 
   it('throws error for required fields', () => {
-    expect(
-      () =>
-        validateConfig({
+    expect(() =>
+      validateConfig(
+        {
           invalidField: true,
           presets: {},
           stylesheets: {},
           themes: {},
           scripts: {},
-        } as unknown as DocusaurusConfig), // to fields not in the type
+        },
+        'docusaurus.config.js',
+      ),
+    ).toThrowErrorMatchingSnapshot();
+  });
+
+  it('throws for "error" reporting severity', () => {
+    expect(() =>
+      validateConfig(
+        {
+          title: 'Site',
+          url: 'https://example.com',
+          baseUrl: '/',
+          onBrokenLinks: 'error',
+        },
+        'docusaurus.config.js',
+      ),
     ).toThrowErrorMatchingSnapshot();
   });
 });
@@ -314,11 +406,11 @@ describe('config warnings', () => {
     const warning = getWarning({
       ...baseConfig,
       url: 'https://mysite.com/someSubpath',
-    });
+    })!;
     expect(warning).toBeDefined();
     expect(warning.details).toHaveLength(1);
-    expect(warning.details[0].message).toMatchInlineSnapshot(
-      `"Docusaurus config validation warning. Field "url": the url is not supposed to contain a sub-path like '/someSubpath', please use the baseUrl field for sub-paths"`,
+    expect(warning.details[0]!.message).toMatchInlineSnapshot(
+      `"Docusaurus config validation warning. Field "url": The url is not supposed to contain a sub-path like '/someSubpath'. Please use the baseUrl field for sub-paths."`,
     );
   });
 });

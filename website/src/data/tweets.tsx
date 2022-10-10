@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+/* eslint-disable @docusaurus/no-untranslated-text */
+
 import React from 'react';
 
 import type {Props as Tweet} from '../components/Tweet';
@@ -97,8 +99,8 @@ const TWEETS: TweetItem[] = [
   },
   {
     url: 'https://twitter.com/sanketsahu/status/1328677366642528257',
-    handle: 'Sanket Sahu',
-    name: 'sanketsahu',
+    handle: 'sanketsahu',
+    name: 'Sanket Sahu',
     date: 'Nov 17, 2020',
     avatar:
       'https://pbs.twimg.com/profile_images/1481221429991718913/aNZZgZME_400x400.jpg',
@@ -111,11 +113,11 @@ const TWEETS: TweetItem[] = [
   },
   {
     url: 'https://twitter.com/debs_obrien/status/1374615572298801155',
-    handle: "Debbie O'Brien",
-    name: 'debs_obrien',
+    handle: 'debs_obrien',
+    name: "Debbie O'Brien",
     date: 'Mar 24, 2021',
     avatar:
-      'https://pbs.twimg.com/profile_images/1252900852156772352/JLIVJ-TC_400x400.jpg',
+      'https://pbs.twimg.com/profile_images/1537114604278530048/FMrBa87o_400x400.jpg',
     content: (
       <>
         Been doing a lot of work with <b>@docusaurus</b> lately and I have to
@@ -150,7 +152,7 @@ const TWEETS: TweetItem[] = [
     name: 'Kent C. Dodds',
     date: 'Nov 4, 2020',
     avatar:
-      'https://pbs.twimg.com/profile_images/1444988463216922631/IDffhy4i_400x400.jpg',
+      'https://pbs.twimg.com/profile_images/1529905780542959616/Ibwrp7VJ_400x400.jpg',
     content: (
       <>
         http://testing-library.com just got a nice update! We&apos;re now on the

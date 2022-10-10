@@ -12,12 +12,12 @@ import {useHistory} from '@docusaurus/router';
 import {useBaseUrlUtils} from '@docusaurus/useBaseUrl';
 import Link from '@docusaurus/Link';
 import Head from '@docusaurus/Head';
-import {isRegexpStringMatch, useSearchPage} from '@docusaurus/theme-common';
+import {isRegexpStringMatch} from '@docusaurus/theme-common';
+import {useSearchPage} from '@docusaurus/theme-common/internal';
 import {DocSearchButton, useDocSearchKeyboardEvents} from '@docsearch/react';
-import type {SearchClient} from 'algoliasearch/lite';
 import {useAlgoliaContextualFacetFilters} from '@docusaurus/theme-search-algolia/client';
-import Translate, {translate} from '@docusaurus/Translate';
-import styles from './styles.module.css';
+import Translate from '@docusaurus/Translate';
+import translations from '@theme/SearchTranslations';
 
 import type {
   DocSearchModal as DocSearchModalType,
@@ -27,6 +27,7 @@ import type {
   InternalDocSearchHit,
   StoredDocSearchHit,
 } from '@docsearch/react/dist/esm/types';
+import type {SearchClient} from 'algoliasearch/lite';
 import type {AutocompleteState} from '@algolia/autocomplete-core';
 
 type DocSearchProps = Omit<
@@ -76,7 +77,7 @@ type FacetFilters = Required<
 function mergeFacetFilters(f1: FacetFilters, f2: FacetFilters): FacetFilters {
   const normalize = (
     f: FacetFilters,
-  ): readonly string[] | ReadonlyArray<string | readonly string[]> =>
+  ): readonly string[] | readonly (string | readonly string[])[] =>
     typeof f === 'string' ? [f] : f;
   return [...normalize(f1), ...normalize(f2)] as FacetFilters;
 }
@@ -100,7 +101,7 @@ function DocSearch({
     : // ... or use config facetFilters
       configFacetFilters;
 
-  // we let user override default searchParameters if he wants to
+  // We let user override default searchParameters if she wants to
   const searchParameters: DocSearchProps['searchParameters'] = {
     ...props.searchParameters,
     facetFilters,
@@ -121,7 +122,9 @@ function DocSearch({
     }
 
     return Promise.all([
-      import('@docsearch/react/modal'),
+      import('@docsearch/react/modal') as Promise<
+        typeof import('@docsearch/react')
+      >,
       import('@docsearch/react/style'),
       import('./styles.css'),
     ]).then(([{DocSearchModal: Modal}]) => {
@@ -214,12 +217,6 @@ function DocSearch({
     searchButtonRef,
   });
 
-  const translatedSearchLabel = translate({
-    id: 'theme.SearchBar.label',
-    message: 'Search',
-    description: 'The ARIA label and placeholder for search button',
-  });
-
   return (
     <>
       <Head>
@@ -233,19 +230,14 @@ function DocSearch({
         />
       </Head>
 
-      <div className={styles.searchBox}>
-        <DocSearchButton
-          onTouchStart={importDocSearchModalIfNeeded}
-          onFocus={importDocSearchModalIfNeeded}
-          onMouseOver={importDocSearchModalIfNeeded}
-          onClick={onOpen}
-          ref={searchButtonRef}
-          translations={{
-            buttonText: translatedSearchLabel,
-            buttonAriaLabel: translatedSearchLabel,
-          }}
-        />
-      </div>
+      <DocSearchButton
+        onTouchStart={importDocSearchModalIfNeeded}
+        onFocus={importDocSearchModalIfNeeded}
+        onMouseOver={importDocSearchModalIfNeeded}
+        onClick={onOpen}
+        ref={searchButtonRef}
+        translations={translations.button}
+      />
 
       {isOpen &&
         DocSearchModal &&
@@ -264,6 +256,8 @@ function DocSearch({
             })}
             {...props}
             searchParameters={searchParameters}
+            placeholder={translations.placeholder}
+            translations={translations.modal}
           />,
           searchContainer.current,
         )}

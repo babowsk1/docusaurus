@@ -12,19 +12,32 @@ import vfile from 'to-vfile';
 import plugin from '../index';
 import headings from '../../headings/index';
 
-const processFixture = async (name, options?) => {
+const processFixture = async (name: string) => {
   const filePath = path.join(__dirname, '__fixtures__', `${name}.md`);
   const file = await vfile.read(filePath);
   const result = await remark()
     .use(headings)
     .use(mdx)
-    .use(plugin, options)
+    .use(plugin)
     .process(file);
 
   return result.toString();
 };
 
 describe('toc remark plugin', () => {
+  it('outputs empty array for no TOC', async () => {
+    const result = await processFixture('no-heading');
+    expect(result).toMatchSnapshot();
+  });
+
+  // A very implicit API: we allow users to hand-write the toc variable. It will
+  // get overwritten in most cases, but until we find a better way, better keep
+  // supporting this
+  it('does not overwrite TOC var if no TOC', async () => {
+    const result = await processFixture('no-heading-with-toc-export');
+    expect(result).toMatchSnapshot();
+  });
+
   it('works on non text phrasing content', async () => {
     const result = await processFixture('non-text-content');
     expect(result).toMatchSnapshot();
@@ -42,14 +55,6 @@ describe('toc remark plugin', () => {
 
   it('exports even with existing name', async () => {
     const result = await processFixture('name-exist');
-    expect(result).toMatchSnapshot();
-  });
-
-  it('exports with custom name', async () => {
-    const options = {
-      name: 'customName',
-    };
-    const result = await processFixture('just-content', options);
     expect(result).toMatchSnapshot();
   });
 

@@ -6,7 +6,6 @@
  */
 
 import path from 'path';
-import admonitions from 'remark-admonitions';
 import type {RuleSetRule} from 'webpack';
 import type {HtmlTagObject, LoadedPlugin, LoadContext} from '@docusaurus/types';
 
@@ -89,7 +88,7 @@ export function createMDXFallbackPlugin({
       // processed by content plugins mdx loaders. This works, but a bit
       // hacky... Not sure there's a way to handle that differently in webpack
       function getMDXFallbackExcludedPaths(): string[] {
-        const rules: RuleSetRule[] = config?.module?.rules as RuleSetRule[];
+        const rules: RuleSetRule[] = config.module?.rules as RuleSetRule[];
         return rules.flatMap((rule) => {
           const isMDXRule =
             rule.test instanceof RegExp && rule.test.test('x.mdx');
@@ -97,6 +96,7 @@ export function createMDXFallbackPlugin({
         });
       }
       const mdxLoaderOptions = {
+        admonitions: true,
         staticDirs: siteConfig.staticDirectories.map((dir) =>
           path.resolve(siteDir, dir),
         ),
@@ -105,7 +105,6 @@ export function createMDXFallbackPlugin({
         isMDXPartial: () => true,
         // External MDX files might have front matter, just disable the warning
         isMDXPartialFrontMatterWarningDisabled: true,
-        remarkPlugins: [admonitions],
       };
 
       return {

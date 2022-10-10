@@ -87,17 +87,46 @@ describe('validation schemas', () => {
   it('admonitionsSchema', () => {
     const {testOK, testFail} = createTestHelpers({
       schema: AdmonitionsSchema,
-      defaultValue: {},
+      defaultValue: true,
     });
 
     testOK(undefined);
+    testOK(true);
+    testOK(false);
     testOK({});
-    testOK({attr: 'val'});
+    testOK({tag: '+++'});
+    testOK({keywords: ['info', 'tip']});
+    testOK({keywords: ['info', 'tip'], extendDefaults: true});
+    testOK({keywords: ['info', 'tip'], extendDefaults: false});
+    testOK({keywords: []});
+    testOK({keywords: [], extendDefaults: true}); // noop
+    testOK({keywords: [], extendDefaults: false}); // disable admonitions
+    testOK({tag: '+++', keywords: ['info', 'tip']});
+    testOK({tag: '+++', keywords: ['custom-keyword'], extendDefaults: true});
+    testOK({tag: '+++', keywords: ['custom-keyword'], extendDefaults: false});
 
-    testFail(null);
     testFail(3);
-    testFail(true);
     testFail([]);
+    testFail({unknownAttribute: 'val'});
+    testFail({tag: ''});
+    testFail({keywords: ['custom-keyword'], extendDefaults: 42});
+
+    // Legacy types
+    testFail({
+      infima: true,
+    });
+    testFail({
+      icons: 'emoji',
+    });
+    testFail({
+      customTypes: {
+        myKeyword: {
+          keyword: `myKeyword`,
+          infima: true,
+          svg: '<svg width="512px" height="512px" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"></svg>',
+        },
+      },
+    });
   });
 
   it('remarkPluginsSchema', () => {

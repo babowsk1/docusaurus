@@ -7,6 +7,7 @@
 
 declare module '@docusaurus/plugin-content-pages' {
   import type {MDXOptions} from '@docusaurus/mdx-loader';
+  import type {LoadContext, Plugin} from '@docusaurus/types';
 
   export type PluginOptions = MDXOptions & {
     id?: string;
@@ -15,7 +16,6 @@ declare module '@docusaurus/plugin-content-pages' {
     include: string[];
     exclude: string[];
     mdxPageComponent: string;
-    admonitions: {[key: string]: unknown};
   };
 
   export type Options = Partial<PluginOptions>;
@@ -45,6 +45,13 @@ declare module '@docusaurus/plugin-content-pages' {
   };
 
   export type Metadata = JSXPageMetadata | MDXPageMetadata;
+
+  export type LoadedContent = Metadata[];
+
+  export default function pluginContentPages(
+    context: LoadContext,
+    options: PluginOptions,
+  ): Promise<Plugin<LoadedContent | null>>;
 }
 
 declare module '@theme/MDXPage' {

@@ -6,25 +6,29 @@
  */
 
 import path from 'path';
-import type {Configuration} from 'webpack';
 import merge from 'webpack-merge';
-
-import type {Props} from '@docusaurus/types';
+import {
+  NODE_MAJOR_VERSION,
+  NODE_MINOR_VERSION,
+  DOCUSAURUS_VERSION,
+} from '@docusaurus/utils';
+// Forked for Docusaurus: https://github.com/slorber/static-site-generator-webpack-plugin
+import StaticSiteGeneratorPlugin, {
+  type Locals,
+} from '@slorber/static-site-generator-webpack-plugin';
 import {createBaseConfig} from './base';
 import WaitPlugin from './plugins/WaitPlugin';
 import LogPlugin from './plugins/LogPlugin';
-import {NODE_MAJOR_VERSION, NODE_MINOR_VERSION} from '@docusaurus/utils';
 import ssrDefaultTemplate from './templates/ssr.html.template';
-
-// Forked for Docusaurus: https://github.com/slorber/static-site-generator-webpack-plugin
-import StaticSiteGeneratorPlugin from '@slorber/static-site-generator-webpack-plugin';
+import type {Props} from '@docusaurus/types';
+import type {Configuration} from 'webpack';
 
 export default async function createServerConfig({
   props,
-  onLinksCollected = () => {},
-}: {
+  onLinksCollected,
+  onHeadTagsCollected,
+}: Pick<Locals, 'onLinksCollected' | 'onHeadTagsCollected'> & {
   props: Props;
-  onLinksCollected?: (staticPagePath: string, links: string[]) => void;
 }): Promise<Configuration> {
   const {
     baseUrl,
@@ -73,8 +77,10 @@ export default async function createServerConfig({
           preBodyTags,
           postBodyTags,
           onLinksCollected,
+          onHeadTagsCollected,
           ssrTemplate: ssrTemplate ?? ssrDefaultTemplate,
           noIndex,
+          DOCUSAURUS_VERSION,
         },
         paths: ssgPaths,
         preferFoldersOutput: trailingSlash,
@@ -84,6 +90,12 @@ export default async function createServerConfig({
         // has any importance for this plugin, just using an empty string to
         // avoid the error. See https://github.com/facebook/docusaurus/issues/4922
         globals: {__filename: ''},
+
+        // Secret way to set SSR plugin concurrency option
+        // Waiting for feedback before documenting this officially?
+        concurrency: process.env.DOCUSAURUS_SSR_CONCURRENCY
+          ? parseInt(process.env.DOCUSAURUS_SSR_CONCURRENCY, 10)
+          : undefined,
       }),
 
       // Show compilation progress bar.
