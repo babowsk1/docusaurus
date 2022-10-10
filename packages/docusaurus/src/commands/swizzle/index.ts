@@ -5,18 +5,19 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import fs from 'fs-extra';
 import logger from '@docusaurus/logger';
 import {getThemeName, getThemePath, getThemeNames} from './themes';
 import {getThemeComponents, getComponentName} from './components';
 import {helpTables, themeComponentsTable} from './tables';
-import type {SwizzleAction, SwizzleComponentConfig} from '@docusaurus/types';
-import type {SwizzleOptions, SwizzlePlugin} from './common';
 import {normalizeOptions} from './common';
-import type {ActionResult} from './actions';
 import {eject, getAction, wrap} from './actions';
 import {getThemeSwizzleConfig} from './config';
 import {askSwizzleDangerousComponent} from './prompts';
 import {initSwizzleContext} from './context';
+import type {SwizzleAction, SwizzleComponentConfig} from '@docusaurus/types';
+import type {SwizzleCLIOptions, SwizzlePlugin} from './common';
+import type {ActionResult} from './actions';
 
 async function listAllThemeComponents({
   themeNames,
@@ -25,7 +26,7 @@ async function listAllThemeComponents({
 }: {
   themeNames: string[];
   plugins: SwizzlePlugin[];
-  typescript: SwizzleOptions['typescript'];
+  typescript: SwizzleCLIOptions['typescript'];
 }) {
   const themeComponentsTables = (
     await Promise.all(
@@ -87,11 +88,13 @@ If you want to swizzle it, use the code=${'--danger'} flag, or confirm that you 
 }
 
 export async function swizzle(
-  siteDir: string,
-  themeNameParam: string | undefined,
-  componentNameParam: string | undefined,
-  optionsParam: Partial<SwizzleOptions>,
+  themeNameParam: string | undefined = undefined,
+  componentNameParam: string | undefined = undefined,
+  siteDirParam: string = '.',
+  optionsParam: Partial<SwizzleCLIOptions> = {},
 ): Promise<void> {
+  const siteDir = await fs.realpath(siteDirParam);
+
   const options = normalizeOptions(optionsParam);
   const {list, danger, typescript} = options;
 
@@ -142,6 +145,7 @@ Created wrapper of name=${componentName} from name=${themeName} in path=${result
           siteDir,
           themePath,
           componentName,
+          typescript,
         });
         logger.success`
 Ejected name=${componentName} from name=${themeName} to path=${result.createdFiles}

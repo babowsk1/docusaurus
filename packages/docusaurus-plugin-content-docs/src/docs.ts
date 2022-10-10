@@ -19,15 +19,12 @@ import {
   Globby,
   normalizeFrontMatterTags,
 } from '@docusaurus/utils';
-import type {LoadContext} from '@docusaurus/types';
 
 import {getFileLastUpdate} from './lastUpdate';
-import type {DocFile, LoadedVersion} from './types';
 import getSlug from './slug';
 import {CURRENT_VERSION_NAME} from './constants';
 import {stripPathNumberPrefixes} from './numberPrefix';
 import {validateDocFrontMatter} from './frontMatter';
-import type {SidebarsUtils} from './sidebars/utils';
 import {toDocNavigationLink, toNavigationLink} from './sidebars/utils';
 import type {
   MetadataOptions,
@@ -38,7 +35,13 @@ import type {
   PropNavigationLink,
   LastUpdateData,
   VersionMetadata,
+  DocFrontMatter,
+  LoadedVersion,
+  FileChange,
 } from '@docusaurus/plugin-content-docs';
+import type {LoadContext} from '@docusaurus/types';
+import type {SidebarsUtils} from './sidebars/utils';
+import type {DocFile} from './types';
 
 type LastUpdateOptions = Pick<
   PluginOptions,
@@ -48,9 +51,21 @@ type LastUpdateOptions = Pick<
 async function readLastUpdateData(
   filePath: string,
   options: LastUpdateOptions,
+  lastUpdateFrontMatter: FileChange | undefined,
 ): Promise<LastUpdateData> {
   const {showLastUpdateAuthor, showLastUpdateTime} = options;
   if (showLastUpdateAuthor || showLastUpdateTime) {
+    const frontMatterTimestamp = lastUpdateFrontMatter?.date
+      ? new Date(lastUpdateFrontMatter.date).getTime() / 1000
+      : undefined;
+
+    if (lastUpdateFrontMatter?.author && lastUpdateFrontMatter.date) {
+      return {
+        lastUpdatedAt: frontMatterTimestamp,
+        lastUpdatedBy: lastUpdateFrontMatter.author,
+      };
+    }
+
     // Use fake data in dev for faster development.
     const fileLastUpdateData =
       process.env.NODE_ENV === 'production'
@@ -59,14 +74,16 @@ async function readLastUpdateData(
             author: 'Author',
             timestamp: 1539502055,
           };
+    const {author, timestamp} = fileLastUpdateData ?? {};
 
-    if (fileLastUpdateData) {
-      const {author, timestamp} = fileLastUpdateData;
-      return {
-        lastUpdatedAt: showLastUpdateTime ? timestamp : undefined,
-        lastUpdatedBy: showLastUpdateAuthor ? author : undefined,
-      };
-    }
+    return {
+      lastUpdatedBy: showLastUpdateAuthor
+        ? lastUpdateFrontMatter?.author ?? author
+        : undefined,
+      lastUpdatedAt: showLastUpdateTime
+        ? frontMatterTimestamp ?? timestamp
+        : undefined,
+    };
   }
 
   return {};
@@ -78,7 +95,6 @@ export async function readDocFile(
     'contentPath' | 'contentPathLocalized'
   >,
   source: string,
-  options: LastUpdateOptions,
 ): Promise<DocFile> {
   const contentPath = await getFolderContainingFile(
     getContentPathList(versionMetadata),
@@ -87,11 +103,8 @@ export async function readDocFile(
 
   const filePath = path.join(contentPath, source);
 
-  const [content, lastUpdate] = await Promise.all([
-    fs.readFile(filePath, 'utf-8'),
-    readLastUpdateData(filePath, options),
-  ]);
-  return {source, content, lastUpdate, contentPath, filePath};
+  const content = await fs.readFile(filePath, 'utf-8');
+  return {source, content, contentPath, filePath};
 }
 
 export async function readVersionDocs(
@@ -106,22 +119,37 @@ export async function readVersionDocs(
     ignore: options.exclude,
   });
   return Promise.all(
-    sources.map((source) => readDocFile(versionMetadata, source, options)),
+    sources.map((source) => readDocFile(versionMetadata, source)),
   );
 }
 
-function doProcessDocMetadata({
+export type DocEnv = 'production' | 'development';
+
+/** Docs with draft front matter are only considered draft in production. */
+function isDraftForEnvironment({
+  env,
+  frontMatter,
+}: {
+  frontMatter: DocFrontMatter;
+  env: DocEnv;
+}): boolean {
+  return (env === 'production' && frontMatter.draft) ?? false;
+}
+
+async function doProcessDocMetadata({
   docFile,
   versionMetadata,
   context,
   options,
+  env,
 }: {
   docFile: DocFile;
   versionMetadata: VersionMetadata;
   context: LoadContext;
   options: MetadataOptions;
-}): DocMetadataBase {
-  const {source, content, lastUpdate, contentPath, filePath} = docFile;
+  env: DocEnv;
+}): Promise<DocMetadataBase> {
+  const {source, content, contentPath, filePath} = docFile;
   const {siteDir, i18n} = context;
 
   const {
@@ -138,17 +166,22 @@ function doProcessDocMetadata({
     // (01-MyFolder/01-MyDoc.md => MyFolder/MyDoc)
     // but allow to disable this behavior with front matter
     parse_number_prefixes: parseNumberPrefixes = true,
+    last_update: lastUpdateFrontMatter,
   } = frontMatter;
 
-  // ex: api/plugins/myDoc -> myDoc
-  // ex: myDoc -> myDoc
+  const lastUpdate = await readLastUpdateData(
+    filePath,
+    options,
+    lastUpdateFrontMatter,
+  );
+
+  // E.g. api/plugins/myDoc -> myDoc; myDoc -> myDoc
   const sourceFileNameWithoutExtension = path.basename(
     source,
     path.extname(source),
   );
 
-  // ex: api/plugins/myDoc -> api/plugins
-  // ex: myDoc -> .
+  // E.g. api/plugins/myDoc -> api/plugins; myDoc -> .
   const sourceDirName = path.dirname(source);
 
   const {filename: unprefixedFileName, numberPrefix} = parseNumberPrefixes
@@ -235,6 +268,23 @@ function doProcessDocMetadata({
     return undefined;
   }
 
+  const draft = isDraftForEnvironment({env, frontMatter});
+
+  const formatDate = (locale: string, date: Date, calendar: string): string => {
+    try {
+      return new Intl.DateTimeFormat(locale, {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+        calendar,
+      }).format(date);
+    } catch (err) {
+      logger.error`Can't format docs lastUpdatedAt date "${String(date)}"`;
+      throw err;
+    }
+  };
+
   // Assign all of object properties during instantiation (if possible) for
   // NodeJS optimization.
   // Adding properties to object after instantiation will cause hidden
@@ -248,15 +298,18 @@ function doProcessDocMetadata({
     sourceDirName,
     slug: docSlug,
     permalink,
+    draft,
     editUrl: customEditURL !== undefined ? customEditURL : getDocEditUrl(),
     tags: normalizeFrontMatterTags(versionMetadata.tagsPath, frontMatter.tags),
     version: versionMetadata.versionName,
     lastUpdatedBy: lastUpdate.lastUpdatedBy,
     lastUpdatedAt: lastUpdate.lastUpdatedAt,
     formattedLastUpdatedAt: lastUpdate.lastUpdatedAt
-      ? new Intl.DateTimeFormat(i18n.currentLocale, {
-          calendar: i18n.localeConfigs[i18n.currentLocale]!.calendar,
-        }).format(lastUpdate.lastUpdatedAt * 1000)
+      ? formatDate(
+          i18n.currentLocale,
+          new Date(lastUpdate.lastUpdatedAt * 1000),
+          i18n.localeConfigs[i18n.currentLocale]!.calendar,
+        )
       : undefined,
     sidebarPosition,
     frontMatter,
@@ -268,7 +321,8 @@ export function processDocMetadata(args: {
   versionMetadata: VersionMetadata;
   context: LoadContext;
   options: MetadataOptions;
-}): DocMetadataBase {
+  env: DocEnv;
+}): Promise<DocMetadataBase> {
   try {
     return doProcessDocMetadata(args);
   } catch (err) {
@@ -327,7 +381,7 @@ export function addDocNavigation(
   }
 
   const docsWithNavigation = docsBase.map(addNavData);
-  // sort to ensure consistent output for tests
+  // Sort to ensure consistent output for tests
   docsWithNavigation.sort((a, b) => a.id.localeCompare(b.id));
   return docsWithNavigation;
 }
@@ -414,7 +468,7 @@ export function getDocIds(doc: DocMetadataBase): [string, string] {
   return [doc.unversionedId, doc.id];
 }
 
-// docs are indexed by both versioned and unversioned ids at the same time
+// Docs are indexed by both versioned and unversioned ids at the same time
 // TODO legacy retro-compatibility due to old versioned sidebars using
 // versioned doc ids ("id" should be removed & "versionedId" should be renamed
 // to "id")

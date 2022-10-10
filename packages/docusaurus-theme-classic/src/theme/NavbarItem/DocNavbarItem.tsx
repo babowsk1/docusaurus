@@ -6,35 +6,33 @@
  */
 
 import React from 'react';
-import DefaultNavbarItem from '@theme/NavbarItem/DefaultNavbarItem';
 import {useActiveDocContext} from '@docusaurus/plugin-content-docs/client';
-import clsx from 'clsx';
-import {getInfimaActiveClassName} from '@theme/NavbarItem/utils';
+import {useLayoutDoc} from '@docusaurus/theme-common/internal';
+import DefaultNavbarItem from '@theme/NavbarItem/DefaultNavbarItem';
 import type {Props} from '@theme/NavbarItem/DocNavbarItem';
-import {useLayoutDoc} from '@docusaurus/theme-common';
 
 export default function DocNavbarItem({
   docId,
   label: staticLabel,
   docsPluginId,
   ...props
-}: Props): JSX.Element {
+}: Props): JSX.Element | null {
   const {activeDoc} = useActiveDocContext(docsPluginId);
   const doc = useLayoutDoc(docId, docsPluginId);
-  const activeDocInfimaClassName = getInfimaActiveClassName(props.mobile);
+
+  // Draft items are not displayed in the navbar.
+  if (doc === null) {
+    return null;
+  }
 
   return (
     <DefaultNavbarItem
       exact
       {...props}
-      className={clsx(props.className, {
-        [activeDocInfimaClassName]:
-          // Do not make the item active if the active doc doesn't have sidebar.
-          // If `activeDoc === doc` react-router will make it active anyways,
-          // regardless of the existence of a sidebar
-          activeDoc?.sidebar && activeDoc.sidebar === doc.sidebar,
-      })}
-      activeClassName={activeDocInfimaClassName}
+      isActive={() =>
+        activeDoc?.path === doc.path ||
+        (!!activeDoc?.sidebar && activeDoc.sidebar === doc.sidebar)
+      }
       label={staticLabel ?? doc.id}
       to={doc.path}
     />

@@ -5,18 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import logger from '@docusaurus/logger';
-import CopyWebpackPlugin from 'copy-webpack-plugin';
 import fs from 'fs-extra';
 import path from 'path';
+import logger from '@docusaurus/logger';
+import {mapAsyncSequential} from '@docusaurus/utils';
+import CopyWebpackPlugin from 'copy-webpack-plugin';
 import ReactLoadableSSRAddon from 'react-loadable-ssr-addon-v5-slorber';
-import type {Configuration} from 'webpack';
 import {BundleAnalyzerPlugin} from 'webpack-bundle-analyzer';
 import merge from 'webpack-merge';
-import {load, loadContext} from '../server';
+import {load, loadContext, type LoadContextOptions} from '../server';
 import {handleBrokenLinks} from '../server/brokenLinks';
 
-import type {BuildCLIOptions, Props} from '@docusaurus/types';
 import createClientConfig from '../webpack/client';
 import createServerConfig from '../webpack/server';
 import {
@@ -26,10 +25,20 @@ import {
 } from '../webpack/utils';
 import CleanWebpackPlugin from '../webpack/plugins/CleanWebpackPlugin';
 import {loadI18n} from '../server/i18n';
-import {mapAsyncSequential} from '@docusaurus/utils';
+import type {HelmetServerState} from 'react-helmet-async';
+import type {Configuration} from 'webpack';
+import type {Props} from '@docusaurus/types';
+
+export type BuildCLIOptions = Pick<
+  LoadContextOptions,
+  'config' | 'locale' | 'outDir'
+> & {
+  bundleAnalyzer?: boolean;
+  minify?: boolean;
+};
 
 export async function build(
-  siteDir: string,
+  siteDirParam: string = '.',
   cliOptions: Partial<BuildCLIOptions> = {},
   // When running build, we force terminate the process to prevent async
   // operations from never returning. However, if run as part of docusaurus
@@ -37,6 +46,8 @@ export async function build(
   // See https://github.com/facebook/docusaurus/pull/2496
   forceTerminate: boolean = true,
 ): Promise<string> {
+  const siteDir = await fs.realpath(siteDirParam);
+
   ['SIGINT', 'SIGTERM'].forEach((sig) => {
     process.on(sig, () => process.exit());
   });
@@ -63,8 +74,8 @@ export async function build(
   }
   const context = await loadContext({
     siteDir,
-    customOutDir: cliOptions.outDir,
-    customConfigFilePath: cliOptions.config,
+    outDir: cliOptions.outDir,
+    config: cliOptions.config,
     locale: cliOptions.locale,
     localizePath: cliOptions.locale ? false : undefined,
   });
@@ -112,8 +123,8 @@ async function buildLocale({
 
   const props: Props = await load({
     siteDir,
-    customOutDir: cliOptions.outDir,
-    customConfigFilePath: cliOptions.config,
+    outDir: cliOptions.outDir,
+    config: cliOptions.config,
     locale,
     localizePath: cliOptions.locale ? false : undefined,
   });
@@ -123,7 +134,11 @@ async function buildLocale({
     outDir,
     generatedFilesDir,
     plugins,
-    siteConfig: {baseUrl, onBrokenLinks, staticDirectories},
+    siteConfig: {
+      baseUrl,
+      onBrokenLinks,
+      staticDirectories: staticDirectoriesOption,
+    },
     routes,
   } = props;
 
@@ -144,28 +159,47 @@ async function buildLocale({
         new ReactLoadableSSRAddon({
           filename: clientManifestPath,
         }),
-      ].filter(Boolean),
+      ].filter(<T>(x: T | undefined | false): x is T => Boolean(x)),
     },
   );
 
   const allCollectedLinks: {[location: string]: string[]} = {};
+  const headTags: {[location: string]: HelmetServerState} = {};
 
   let serverConfig: Configuration = await createServerConfig({
     props,
     onLinksCollected: (staticPagePath, links) => {
       allCollectedLinks[staticPagePath] = links;
     },
+    onHeadTagsCollected: (staticPagePath, tags) => {
+      headTags[staticPagePath] = tags;
+    },
   });
 
-  if (staticDirectories.length > 0) {
-    await Promise.all(staticDirectories.map((dir) => fs.ensureDir(dir)));
+  // The staticDirectories option can contain empty directories, or non-existent
+  // directories (e.g. user deleted `static`). Instead of issuing an error, we
+  // just silently filter them out, because user could have never configured it
+  // in the first place (the default option should always "work").
+  const staticDirectories = (
+    await Promise.all(
+      staticDirectoriesOption.map(async (dir) => {
+        const staticDir = path.resolve(siteDir, dir);
+        if (
+          (await fs.pathExists(staticDir)) &&
+          (await fs.readdir(staticDir)).length > 0
+        ) {
+          return staticDir;
+        }
+        return '';
+      }),
+    )
+  ).filter(Boolean);
 
+  if (staticDirectories.length > 0) {
     serverConfig = merge(serverConfig, {
       plugins: [
         new CopyWebpackPlugin({
-          patterns: staticDirectories
-            .map((dir) => path.resolve(siteDir, dir))
-            .map((dir) => ({from: dir, to: outDir})),
+          patterns: staticDirectories.map((dir) => ({from: dir, to: outDir})),
         }),
       ],
     });
@@ -224,7 +258,11 @@ async function buildLocale({
       if (!plugin.postBuild) {
         return;
       }
-      await plugin.postBuild({...props, content: plugin.content});
+      await plugin.postBuild({
+        ...props,
+        head: headTags,
+        content: plugin.content,
+      });
     }),
   );
 

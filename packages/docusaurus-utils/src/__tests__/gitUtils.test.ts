@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {FileNotTrackedError, getFileCommitDate} from '../gitUtils';
 import fs from 'fs-extra';
 import path from 'path';
 import {createTempRepo} from '@testing-utils/git';
+import {FileNotTrackedError, getFileCommitDate} from '../gitUtils';
 
 /* eslint-disable no-restricted-properties */
 function initializeTempRepo() {
@@ -120,7 +120,7 @@ describe('getFileCommitDate', () => {
         age: 'newest',
         includeAuthor: true,
       }),
-    ).toThrowError(FileNotTrackedError);
+    ).toThrow(FileNotTrackedError);
   });
   it('throws when file not found', async () => {
     expect(() =>
@@ -128,7 +128,7 @@ describe('getFileCommitDate', () => {
         age: 'newest',
         includeAuthor: true,
       }),
-    ).toThrowError(
+    ).toThrow(
       /Failed to retrieve git history for ".*nonexistent.txt" because the file does not exist./,
     );
   });

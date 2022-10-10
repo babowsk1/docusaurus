@@ -6,6 +6,8 @@
  */
 
 import React from 'react';
+import clsx from 'clsx';
+import LiteYouTubeEmbed from 'react-lite-youtube-embed';
 import Link from '@docusaurus/Link';
 import Translate, {translate} from '@docusaurus/Translate';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
@@ -19,9 +21,10 @@ import Tweets, {type TweetItem} from '@site/src/data/tweets';
 import Quotes from '@site/src/data/quotes';
 import Features, {type FeatureItem} from '@site/src/data/features';
 
-import clsx from 'clsx';
-
+import ProductHuntCard from '@site/src/components/ProductHuntCard';
+import HackerNewsIcon from '@site/src/components/HackerNewsIcon';
 import styles from './styles.module.css';
+import 'react-lite-youtube-embed/dist/LiteYouTubeEmbed.css';
 
 function HeroBanner() {
   return (
@@ -90,25 +93,24 @@ function MigrationAnnouncement() {
               </Link>
             ),
           }}>
-          {`Coming from {docusaurusV1Link}? Check out our {migrationGuideLink}`}
+          {`Coming from {docusaurusV1Link}? Check out our {migrationGuideLink}.`}
         </Translate>
-        .
       </div>
     </div>
   );
 }
 
 function TweetsSection() {
-  const tweetColumns: Array<Array<TweetItem>> = [[], [], []];
+  const tweetColumns: TweetItem[][] = [[], [], []];
   Tweets.filter((tweet) => tweet.showOnHomepage).forEach((tweet, i) =>
-    tweetColumns[i % 3].push(tweet),
+    tweetColumns[i % 3]!.push(tweet),
   );
 
   return (
     <div className={clsx(styles.section, styles.sectionAlt)}>
       <div className="container">
         <h2 className={clsx('margin-bottom--lg', 'text--center')}>
-          Loved by many engineers
+          <Translate>Loved by many engineers</Translate>
         </h2>
         <div className={clsx('row', styles.tweetsSection)}>
           {tweetColumns.map((tweetItems, i) => (
@@ -163,15 +165,21 @@ function VideoContainer() {
             <Translate>Check it out in the intro video</Translate>
           </h2>
           <div className="video-container">
-            <iframe
-              width="560"
-              height="315"
-              src="https://www.youtube.com/embed/_An9EsKPhp0"
+            <LiteYouTubeEmbed
+              id="_An9EsKPhp0"
+              params="autoplay=1&autohide=1&showinfo=0&rel=0"
               title="Explain Like I'm 5: Docusaurus"
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              loading="lazy"
+              poster="maxresdefault"
+              webp
+            />
+          </div>
+          <div className="video-container">
+            <LiteYouTubeEmbed
+              id="T3S8GyFIXjo"
+              params="autoplay=1&autohide=1&showinfo=0&rel=0"
+              title="Explain Like I'm 5: Docusaurus"
+              poster="maxresdefault"
+              webp
             />
           </div>
         </div>
@@ -232,6 +240,67 @@ function FeaturesContainer() {
   );
 }
 
+function TopBanner() {
+  /* TODO restore Ukraine banner after launch
+    <Translate
+        id="homepage.banner"
+        values={{
+          link: (
+            <Link to="https://opensource.facebook.com/support-ukraine">
+              <Translate id="homepage.banner.link">
+                Help Provide Humanitarian Aid to Ukraine
+              </Translate>
+            </Link>
+          ),
+        }}>
+        {'Support Ukraine 🇺🇦 {link}.'}
+      </Translate>
+   */
+  return (
+    <div className={styles.topBanner}>
+      <div className={styles.topBannerTitle}>
+        {'🎉\xa0'}
+        <Link
+          to="/blog/2022/08/01/announcing-docusaurus-2.0"
+          className={styles.topBannerTitleText}>
+          <Translate id="homepage.banner.launch.2.0">
+            {'Docusaurus\xa02.0 is\xa0out!️'}
+          </Translate>
+        </Link>
+        {'\xa0🥳'}
+      </div>
+      <div style={{display: 'flex', alignItems: 'center', flexWrap: 'wrap'}}>
+        <div style={{flex: 1, whiteSpace: 'nowrap'}}>
+          <div className={styles.topBannerDescription}>
+            We are on{' '}
+            <b>
+              <Link to="https://www.producthunt.com/posts/docusaurus-2-0">
+                ProductHunt
+              </Link>{' '}
+              and{' '}
+              <Link to="https://news.ycombinator.com/item?id=32303052">
+                Hacker News
+              </Link>{' '}
+              today!
+            </b>
+          </div>
+        </div>
+        <div
+          style={{
+            flexGrow: 1,
+            flexShrink: 0,
+            padding: '0.5rem',
+            display: 'flex',
+            justifyContent: 'center',
+          }}>
+          <ProductHuntCard />
+          <HackerNewsIcon />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Home(): JSX.Element {
   const {
     siteConfig: {customFields, tagline},
@@ -240,15 +309,7 @@ export default function Home(): JSX.Element {
   return (
     <Layout title={tagline} description={description}>
       <main>
-        <div>
-          <div className={styles.banner}>
-            Support Ukraine 🇺🇦{' '}
-            <Link to="https://opensource.facebook.com/support-ukraine">
-              Help Provide Humanitarian Aid to Ukraine
-            </Link>
-            .
-          </div>
-        </div>
+        <TopBanner />
         <HeroBanner />
         <MigrationAnnouncement />
         <div className={styles.section}>

@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {getLangDir} from 'rtl-detect';
 import logger from '@docusaurus/logger';
+import {getLangDir} from 'rtl-detect';
 import type {I18n, DocusaurusConfig, I18nLocaleConfig} from '@docusaurus/types';
 import type {LoadContextOptions} from './index';
 
@@ -26,6 +26,7 @@ export function getDefaultLocaleConfig(locale: string): I18nLocaleConfig {
     htmlLang: locale,
     // If the locale name includes -u-ca-xxx the calendar will be defined
     calendar: new Intl.Locale(locale).calendar ?? 'gregory',
+    path: locale,
   };
 }
 
@@ -60,6 +61,7 @@ Note: Docusaurus only support running one locale at a time.`;
   return {
     defaultLocale: i18nConfig.defaultLocale,
     locales,
+    path: i18nConfig.path,
     currentLocale,
     localeConfigs,
   };

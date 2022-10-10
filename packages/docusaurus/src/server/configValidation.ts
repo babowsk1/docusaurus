@@ -5,17 +5,21 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type {DocusaurusConfig, I18nConfig} from '@docusaurus/types';
 import {
-  DEFAULT_CONFIG_FILE_NAME,
   DEFAULT_STATIC_DIR_NAME,
+  DEFAULT_I18N_DIR_NAME,
+  addLeadingSlash,
+  addTrailingSlash,
+  removeTrailingSlash,
 } from '@docusaurus/utils';
-import {Joi, URISchema, printWarning} from '@docusaurus/utils-validation';
+import {Joi, printWarning} from '@docusaurus/utils-validation';
+import type {DocusaurusConfig, I18nConfig} from '@docusaurus/types';
 
 const DEFAULT_I18N_LOCALE = 'en';
 
 export const DEFAULT_I18N_CONFIG: I18nConfig = {
   defaultLocale: DEFAULT_I18N_LOCALE,
+  path: DEFAULT_I18N_DIR_NAME,
   locales: [DEFAULT_I18N_LOCALE],
   localeConfigs: {},
 };
@@ -100,7 +104,9 @@ function createPluginSchema(theme: boolean) {
 
           error.message = ` => Bad Docusaurus ${
             theme ? 'theme' : 'plugin'
-          } value as path [${error.path}].
+          } value ${error.path.reduce((acc, cur) =>
+            typeof cur === 'string' ? `${acc}.${cur}` : `${acc}[${cur}]`,
+          )}.
 ${validConfigExample}
 `;
         });
@@ -132,10 +138,12 @@ const LocaleConfigSchema = Joi.object({
   htmlLang: Joi.string(),
   direction: Joi.string().equal('ltr', 'rtl').default('ltr'),
   calendar: Joi.string(),
+  path: Joi.string(),
 });
 
 const I18N_CONFIG_SCHEMA = Joi.object<I18nConfig>({
   defaultLocale: Joi.string().required(),
+  path: Joi.string().default(DEFAULT_I18N_CONFIG.path),
   locales: Joi.array().items().min(1).items(Joi.string().required()).required(),
   localeConfigs: Joi.object()
     .pattern(/.*/, LocaleConfigSchema)
@@ -144,24 +152,31 @@ const I18N_CONFIG_SCHEMA = Joi.object<I18nConfig>({
   .optional()
   .default(DEFAULT_I18N_CONFIG);
 
-const SiteUrlSchema = URISchema.required().custom((value, helpers) => {
-  try {
-    const {pathname} = new URL(value);
-    if (pathname !== '/') {
-      helpers.warn('docusaurus.configValidationWarning', {
-        warningMessage: `the url is not supposed to contain a sub-path like '${pathname}', please use the baseUrl field for sub-paths`,
-      });
+const SiteUrlSchema = Joi.string()
+  .required()
+  .custom((value: string, helpers) => {
+    try {
+      const {pathname} = new URL(value);
+      if (pathname !== '/') {
+        helpers.warn('docusaurus.configValidationWarning', {
+          warningMessage: `The url is not supposed to contain a sub-path like '${pathname}'. Please use the baseUrl field for sub-paths.`,
+        });
+      }
+    } catch {
+      return helpers.error('any.invalid');
     }
-  } catch {}
-  return value;
-}, 'siteUrlCustomValidation');
+    return removeTrailingSlash(value);
+  })
+  .messages({
+    'any.invalid':
+      '"{#value}" does not look like a valid URL. Make sure it has a protocol; for example, "https://example.com".',
+  });
 
 // TODO move to @docusaurus/utils-validation
-export const ConfigSchema = Joi.object({
+export const ConfigSchema = Joi.object<DocusaurusConfig>({
   baseUrl: Joi.string()
     .required()
-    .regex(/\/$/m)
-    .message('{{#label}} must be a string with a trailing slash.'),
+    .custom((value: string) => addLeadingSlash(addTrailingSlash(value))),
   baseUrlIssueBanner: Joi.boolean().default(DEFAULT_CONFIG.baseUrlIssueBanner),
   favicon: Joi.string().optional(),
   title: Joi.string().required(),
@@ -169,13 +184,13 @@ export const ConfigSchema = Joi.object({
   trailingSlash: Joi.boolean(), // No default value! undefined = retrocompatible legacy behavior!
   i18n: I18N_CONFIG_SCHEMA,
   onBrokenLinks: Joi.string()
-    .equal('ignore', 'log', 'warn', 'error', 'throw')
+    .equal('ignore', 'log', 'warn', 'throw')
     .default(DEFAULT_CONFIG.onBrokenLinks),
   onBrokenMarkdownLinks: Joi.string()
-    .equal('ignore', 'log', 'warn', 'error', 'throw')
+    .equal('ignore', 'log', 'warn', 'throw')
     .default(DEFAULT_CONFIG.onBrokenMarkdownLinks),
   onDuplicateRoutes: Joi.string()
-    .equal('ignore', 'log', 'warn', 'error', 'throw')
+    .equal('ignore', 'log', 'warn', 'throw')
     .default(DEFAULT_CONFIG.onDuplicateRoutes),
   organizationName: Joi.string().allow(''),
   staticDirectories: Joi.array()
@@ -185,6 +200,7 @@ export const ConfigSchema = Joi.object({
   deploymentBranch: Joi.string().optional(),
   customFields: Joi.object().unknown().default(DEFAULT_CONFIG.customFields),
   githubHost: Joi.string(),
+  githubPort: Joi.string(),
   plugins: Joi.array().items(PluginSchema).default(DEFAULT_CONFIG.plugins),
   themes: Joi.array().items(ThemeSchema).default(DEFAULT_CONFIG.themes),
   presets: Joi.array().items(PresetSchema).default(DEFAULT_CONFIG.presets),
@@ -223,8 +239,8 @@ export const ConfigSchema = Joi.object({
     .items(Joi.string())
     .default(DEFAULT_CONFIG.clientModules),
   tagline: Joi.string().allow('').default(DEFAULT_CONFIG.tagline),
-  titleDelimiter: Joi.string().default('|'),
-  noIndex: Joi.bool().default(false),
+  titleDelimiter: Joi.string().default(DEFAULT_CONFIG.titleDelimiter),
+  noIndex: Joi.bool().default(DEFAULT_CONFIG.noIndex),
   webpack: Joi.object({
     jsLoader: Joi.alternatives()
       .try(Joi.string().equal('babel'), Joi.function())
@@ -237,7 +253,8 @@ export const ConfigSchema = Joi.object({
 
 // TODO move to @docusaurus/utils-validation
 export function validateConfig(
-  config: Partial<DocusaurusConfig>,
+  config: unknown,
+  siteConfigPath: string,
 ): DocusaurusConfig {
   const {error, warning, value} = ConfigSchema.validate(config, {
     abortEarly: false,
@@ -248,7 +265,9 @@ export function validateConfig(
   if (error) {
     const unknownFields = error.details.reduce((formattedError, err) => {
       if (err.type === 'object.unknown') {
-        return `${formattedError}"${err.path}",`;
+        return `${formattedError}"${err.path.reduce((acc, cur) =>
+          typeof cur === 'string' ? `${acc}.${cur}` : `${acc}[${cur}]`,
+        )}",`;
       }
       return formattedError;
     }, '');
@@ -260,7 +279,7 @@ export function validateConfig(
       '',
     );
     formattedError = unknownFields
-      ? `${formattedError}These field(s) (${unknownFields}) are not recognized in ${DEFAULT_CONFIG_FILE_NAME}.\nIf you still want these fields to be in your configuration, put them in the "customFields" field.\nSee https://docusaurus.io/docs/api/docusaurus-config/#customfields`
+      ? `${formattedError}These field(s) (${unknownFields}) are not recognized in ${siteConfigPath}.\nIf you still want these fields to be in your configuration, put them in the "customFields" field.\nSee https://docusaurus.io/docs/api/docusaurus-config/#customfields`
       : formattedError;
     throw new Error(formattedError);
   } else {

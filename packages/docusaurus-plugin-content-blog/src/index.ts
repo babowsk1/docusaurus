@@ -6,65 +6,53 @@
  */
 
 import path from 'path';
-import admonitions from 'remark-admonitions';
+import logger from '@docusaurus/logger';
 import {
   normalizeUrl,
   docuHash,
   aliasedSitePath,
   getPluginI18nPath,
-  reportMessage,
   posixPath,
   addTrailingPathSeparator,
   createAbsoluteFilePathMatcher,
   getContentPathList,
   getDataFilePath,
   DEFAULT_PLUGIN_ID,
+  type TagsListItem,
+  type TagModule,
 } from '@docusaurus/utils';
-import {translateContent, getTranslationFiles} from './translations';
-
-import type {
-  BlogTag,
-  BlogTags,
-  BlogContent,
-  BlogPaginated,
-  BlogContentPaths,
-  BlogMarkdownLoaderOptions,
-} from './types';
-import type {
-  LoadContext,
-  Plugin,
-  HtmlTags,
-  TagsListItem,
-  TagModule,
-} from '@docusaurus/types';
 import {
   generateBlogPosts,
   getSourceToPermalink,
   getBlogTags,
   paginateBlogPosts,
 } from './blogUtils';
+import footnoteIDFixer from './remark/footnoteIDFixer';
+import {translateContent, getTranslationFiles} from './translations';
 import {createBlogFeedFiles} from './feed';
+
+import type {BlogContentPaths, BlogMarkdownLoaderOptions} from './types';
+import type {LoadContext, Plugin, HtmlTags} from '@docusaurus/types';
 import type {
   PluginOptions,
   BlogPostFrontMatter,
   BlogPostMetadata,
   Assets,
+  BlogTag,
+  BlogTags,
+  BlogContent,
+  BlogPaginated,
 } from '@docusaurus/plugin-content-blog';
 
 export default async function pluginContentBlog(
   context: LoadContext,
   options: PluginOptions,
 ): Promise<Plugin<BlogContent>> {
-  if (options.admonitions) {
-    options.remarkPlugins = options.remarkPlugins.concat([
-      [admonitions, options.admonitions],
-    ]);
-  }
-
   const {
     siteDir,
     siteConfig,
     generatedFilesDir,
+    localizationDir,
     i18n: {currentLocale},
   } = context;
   const {onBrokenMarkdownLinks, baseUrl} = siteConfig;
@@ -72,8 +60,7 @@ export default async function pluginContentBlog(
   const contentPaths: BlogContentPaths = {
     contentPath: path.resolve(siteDir, options.path),
     contentPathLocalized: getPluginI18nPath({
-      siteDir,
-      locale: currentLocale,
+      localizationDir,
       pluginName: 'docusaurus-plugin-content-blog',
       pluginId: options.id,
     }),
@@ -182,10 +169,6 @@ export default async function pluginContentBlog(
     },
 
     async contentLoaded({content: blogContents, actions}) {
-      if (!blogContents) {
-        return;
-      }
-
       const {
         blogListComponent,
         blogPostComponent,
@@ -212,13 +195,28 @@ export default async function pluginContentBlog(
           ? blogPosts
           : blogPosts.slice(0, options.blogSidebarCount);
 
+      function blogPostItemsModule(items: string[]) {
+        return items.map((postId) => {
+          const blogPostMetadata = blogItemsToMetadata[postId]!;
+          return {
+            content: {
+              __import: true,
+              path: blogPostMetadata.source,
+              query: {
+                truncated: true,
+              },
+            },
+          };
+        });
+      }
+
       if (archiveBasePath && blogPosts.length) {
         const archiveUrl = normalizeUrl([
           baseUrl,
           routeBasePath,
           archiveBasePath,
         ]);
-        // creates a blog archive route
+        // Create a blog archive route
         const archiveProp = await createData(
           `${docuHash(archiveUrl)}.json`,
           JSON.stringify({blogPosts}, null, 2),
@@ -292,15 +290,7 @@ export default async function pluginContentBlog(
             exact: true,
             modules: {
               sidebar: aliasedSource(sidebarProp),
-              items: items.map((postID) => ({
-                content: {
-                  __import: true,
-                  path: blogItemsToMetadata[postID]!.source,
-                  query: {
-                    truncated: true,
-                  },
-                },
-              })),
+              items: blogPostItemsModule(items),
               metadata: aliasedSource(pageMetadataPath),
             },
           });
@@ -361,18 +351,7 @@ export default async function pluginContentBlog(
               exact: true,
               modules: {
                 sidebar: aliasedSource(sidebarProp),
-                items: items.map((postID) => {
-                  const blogPostMetadata = blogItemsToMetadata[postID]!;
-                  return {
-                    content: {
-                      __import: true,
-                      path: blogPostMetadata.source,
-                      query: {
-                        truncated: true,
-                      },
-                    },
-                  };
-                }),
+                items: blogPostItemsModule(items),
                 tag: aliasedSource(tagPropPath),
                 listMetadata: aliasedSource(listMetadataPath),
               },
@@ -391,6 +370,7 @@ export default async function pluginContentBlog(
 
     configureWebpack(_config, isServer, {getJSLoader}, content) {
       const {
+        admonitions,
         rehypePlugins,
         remarkPlugins,
         truncateMarker,
@@ -407,10 +387,9 @@ export default async function pluginContentBlog(
           if (onBrokenMarkdownLinks === 'ignore') {
             return;
           }
-          reportMessage(
-            `Blog markdown link couldn't be resolved: (${brokenMarkdownLink.link}) in ${brokenMarkdownLink.filePath}`,
+          logger.report(
             onBrokenMarkdownLinks,
-          );
+          )`Blog markdown link couldn't be resolved: (url=${brokenMarkdownLink.link}) in path=${brokenMarkdownLink.filePath}`;
         },
       };
 
@@ -433,9 +412,13 @@ export default async function pluginContentBlog(
                 {
                   loader: require.resolve('@docusaurus/mdx-loader'),
                   options: {
+                    admonitions,
                     remarkPlugins,
                     rehypePlugins,
-                    beforeDefaultRemarkPlugins,
+                    beforeDefaultRemarkPlugins: [
+                      footnoteIDFixer,
+                      ...beforeDefaultRemarkPlugins,
+                    ],
                     beforeDefaultRehypePlugins,
                     staticDirs: siteConfig.staticDirectories.map((dir) =>
                       path.resolve(siteDir, dir),
@@ -503,11 +486,7 @@ export default async function pluginContentBlog(
     },
 
     injectHtmlTags({content}) {
-      if (!content.blogPosts.length) {
-        return {};
-      }
-
-      if (!options.feedOptions?.type) {
+      if (!content.blogPosts.length || !options.feedOptions.type) {
         return {};
       }
 

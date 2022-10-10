@@ -6,14 +6,20 @@
  */
 
 import fs from 'fs-extra';
-import shell from 'shelljs';
-import logger from '@docusaurus/logger';
-import {hasSSHProtocol, buildSshUrl, buildHttpsUrl} from '@docusaurus/utils';
-import {loadContext} from '../server';
-import {build} from './build';
-import type {BuildCLIOptions} from '@docusaurus/types';
 import path from 'path';
 import os from 'os';
+import logger from '@docusaurus/logger';
+import shell from 'shelljs';
+import {hasSSHProtocol, buildSshUrl, buildHttpsUrl} from '@docusaurus/utils';
+import {loadContext, type LoadContextOptions} from '../server';
+import {build} from './build';
+
+export type DeployCLIOptions = Pick<
+  LoadContextOptions,
+  'config' | 'locale' | 'outDir'
+> & {
+  skipBuild?: boolean;
+};
 
 // GIT_PASS env variable should not appear in logs
 function obfuscateGitPass(str: string) {
@@ -35,13 +41,15 @@ function shellExecLog(cmd: string) {
 }
 
 export async function deploy(
-  siteDir: string,
-  cliOptions: Partial<BuildCLIOptions> = {},
+  siteDirParam: string = '.',
+  cliOptions: Partial<DeployCLIOptions> = {},
 ): Promise<void> {
+  const siteDir = await fs.realpath(siteDirParam);
+
   const {outDir, siteConfig, siteConfigPath} = await loadContext({
     siteDir,
-    customConfigFilePath: cliOptions.config,
-    customOutDir: cliOptions.outDir,
+    config: cliOptions.config,
+    outDir: cliOptions.outDir,
   });
 
   if (typeof siteConfig.trailingSlash === 'undefined') {
@@ -63,7 +71,7 @@ This behavior can have SEO impacts and create relative link issues.
 
   // The source branch; defaults to the currently checked out branch
   const sourceBranch =
-    process.env.CURRENT_BRANCH ||
+    process.env.CURRENT_BRANCH ??
     shell.exec('git rev-parse --abbrev-ref HEAD', {silent: true}).stdout.trim();
 
   const gitUser = process.env.GIT_USER;
@@ -84,8 +92,8 @@ This behavior can have SEO impacts and create relative link issues.
   }
 
   const organizationName =
-    process.env.ORGANIZATION_NAME ||
-    process.env.CIRCLE_PROJECT_USERNAME ||
+    process.env.ORGANIZATION_NAME ??
+    process.env.CIRCLE_PROJECT_USERNAME ??
     siteConfig.organizationName;
   if (!organizationName) {
     throw new Error(
@@ -95,8 +103,8 @@ This behavior can have SEO impacts and create relative link issues.
   logger.info`organizationName: name=${organizationName}`;
 
   const projectName =
-    process.env.PROJECT_NAME ||
-    process.env.CIRCLE_PROJECT_REPONAME ||
+    process.env.PROJECT_NAME ??
+    process.env.CIRCLE_PROJECT_REPONAME ??
     siteConfig.projectName;
   if (!projectName) {
     throw new Error(
@@ -107,14 +115,15 @@ This behavior can have SEO impacts and create relative link issues.
 
   // We never deploy on pull request.
   const isPullRequest =
-    process.env.CI_PULL_REQUEST || process.env.CIRCLE_PULL_REQUEST;
+    process.env.CI_PULL_REQUEST ?? process.env.CIRCLE_PULL_REQUEST;
   if (isPullRequest) {
     shell.echo('Skipping deploy on a pull request.');
     shell.exit(0);
   }
 
-  // github.io indicates organization repos that deploy via default branch.
-  // All others use gh-pages. Organization deploys looks like:
+  // github.io indicates organization repos that deploy via default branch. All
+  // others use gh-pages (either case can be configured actually, but we can
+  // make educated guesses). Organization deploys look like:
   // - Git repo: https://github.com/<organization>/<organization>.github.io
   // - Site url: https://<organization>.github.io
   const isGitHubPagesOrganizationDeploy = projectName.includes('.github.io');
@@ -129,12 +138,12 @@ You can also set the deploymentBranch property in docusaurus.config.js .`);
   }
 
   const deploymentBranch =
-    process.env.DEPLOYMENT_BRANCH || siteConfig.deploymentBranch || 'gh-pages';
+    process.env.DEPLOYMENT_BRANCH ?? siteConfig.deploymentBranch ?? 'gh-pages';
   logger.info`deploymentBranch: name=${deploymentBranch}`;
 
   const githubHost =
-    process.env.GITHUB_HOST || siteConfig.githubHost || 'github.com';
-  const githubPort = process.env.GITHUB_PORT || siteConfig.githubPort;
+    process.env.GITHUB_HOST ?? siteConfig.githubHost ?? 'github.com';
+  const githubPort = process.env.GITHUB_PORT ?? siteConfig.githubPort;
 
   let deploymentRepoURL: string;
   if (useSSH) {
@@ -207,7 +216,7 @@ You can also set the deploymentBranch property in docusaurus.config.js .`);
     shellExecLog('git add --all');
 
     const commitMessage =
-      process.env.CUSTOM_COMMIT_MESSAGE ||
+      process.env.CUSTOM_COMMIT_MESSAGE ??
       `Deploy website - based on ${currentCommit}`;
     const commitResults = shellExecLog(`git commit -m "${commitMessage}"`);
     if (
@@ -235,7 +244,7 @@ You can also set the deploymentBranch property in docusaurus.config.js .`);
   if (!cliOptions.skipBuild) {
     // Build site, then push to deploymentBranch branch of specified repo.
     try {
-      await runDeploy(await build(siteDir, cliOptions, false));
+      await build(siteDir, cliOptions, false).then(runDeploy);
     } catch (err) {
       logger.error('Deployment of the build output failed.');
       throw err;

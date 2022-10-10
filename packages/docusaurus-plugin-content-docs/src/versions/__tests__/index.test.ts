@@ -7,16 +7,17 @@
 
 import {jest} from '@jest/globals';
 import path from 'path';
+import {DEFAULT_PLUGIN_ID} from '@docusaurus/utils';
 import {readVersionsMetadata} from '../index';
 import {DEFAULT_OPTIONS} from '../../options';
-import {DEFAULT_PLUGIN_ID} from '@docusaurus/utils';
-import type {I18n} from '@docusaurus/types';
+import type {I18n, LoadContext} from '@docusaurus/types';
 import type {
   PluginOptions,
   VersionMetadata,
 } from '@docusaurus/plugin-content-docs';
 
 const DefaultI18N: I18n = {
+  path: 'i18n',
   currentLocale: 'en',
   locales: ['en'],
   defaultLocale: 'en',
@@ -37,7 +38,8 @@ describe('readVersionsMetadata', () => {
         siteDir: simpleSiteDir,
         baseUrl: '/',
         i18n: DefaultI18N,
-      };
+        localizationDir: path.join(simpleSiteDir, 'i18n/en'),
+      } as LoadContext;
 
       const vCurrent: VersionMetadata = {
         contentPath: path.join(simpleSiteDir, 'docs'),
@@ -54,6 +56,7 @@ describe('readVersionsMetadata', () => {
         path: '/docs',
         banner: null,
         badge: false,
+        noIndex: false,
         className: 'docs-version-current',
       };
       return {simpleSiteDir, defaultOptions, defaultContext, vCurrent};
@@ -198,7 +201,8 @@ describe('readVersionsMetadata', () => {
         siteDir: versionedSiteDir,
         baseUrl: '/',
         i18n: DefaultI18N,
-      };
+        localizationDir: path.join(versionedSiteDir, 'i18n/en'),
+      } as LoadContext;
 
       const vCurrent: VersionMetadata = {
         contentPath: path.join(versionedSiteDir, 'docs'),
@@ -215,6 +219,7 @@ describe('readVersionsMetadata', () => {
         path: '/docs/next',
         banner: 'unreleased',
         badge: true,
+        noIndex: false,
         className: 'docs-version-current',
       };
 
@@ -239,6 +244,7 @@ describe('readVersionsMetadata', () => {
         path: '/docs',
         banner: null,
         badge: true,
+        noIndex: false,
         className: 'docs-version-1.0.1',
       };
 
@@ -263,6 +269,7 @@ describe('readVersionsMetadata', () => {
         path: '/docs/1.0.0',
         banner: 'unmaintained',
         badge: true,
+        noIndex: false,
         className: 'docs-version-1.0.0',
       };
 
@@ -287,6 +294,7 @@ describe('readVersionsMetadata', () => {
         path: '/docs/withSlugs',
         banner: 'unmaintained',
         badge: true,
+        noIndex: false,
         className: 'docs-version-withSlugs',
       };
 
@@ -604,7 +612,7 @@ describe('readVersionsMetadata', () => {
           context: defaultContext,
         }),
       ).rejects.toThrowErrorMatchingInlineSnapshot(
-        `"Versions should be strings. Found type "number" for version "1.1"."`,
+        `"Versions should be strings. Found type "number" for version 1.1."`,
       );
       jsonMock.mockImplementationOnce(() => ['   ']);
 
@@ -636,7 +644,8 @@ describe('readVersionsMetadata', () => {
         siteDir: versionedSiteDir,
         baseUrl: '/',
         i18n: DefaultI18N,
-      };
+        localizationDir: path.join(versionedSiteDir, 'i18n/en'),
+      } as LoadContext;
 
       const vCurrent: VersionMetadata = {
         contentPath: path.join(versionedSiteDir, 'community'),
@@ -653,6 +662,7 @@ describe('readVersionsMetadata', () => {
         path: '/communityBasePath/next',
         banner: 'unreleased',
         badge: true,
+        noIndex: false,
         className: 'docs-version-current',
       };
 
@@ -677,6 +687,7 @@ describe('readVersionsMetadata', () => {
         path: '/communityBasePath',
         banner: null,
         badge: true,
+        noIndex: false,
         className: 'docs-version-1.0.0',
       };
 
