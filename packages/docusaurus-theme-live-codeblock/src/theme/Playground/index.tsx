@@ -6,16 +6,18 @@
  */
 
 import React from 'react';
-import {LiveProvider, LiveEditor, LiveError, LivePreview} from 'react-live';
 import clsx from 'clsx';
+import useIsBrowser from '@docusaurus/useIsBrowser';
+import {LiveProvider, LiveEditor, LiveError, LivePreview} from 'react-live';
 import Translate from '@docusaurus/Translate';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import {usePrismTheme} from '@docusaurus/theme-common';
-import styles from './styles.module.css';
-import useIsBrowser from '@docusaurus/useIsBrowser';
+
 import type {Props} from '@theme/Playground';
 import type {ThemeConfig} from '@docusaurus/theme-live-codeblock';
+
+import styles from './styles.module.css';
 
 function Header({children}: {children: React.ReactNode}) {
   return <div className={clsx(styles.playgroundHeader)}>{children}</div>;
@@ -23,6 +25,7 @@ function Header({children}: {children: React.ReactNode}) {
 
 function LivePreviewLoader() {
   // Is it worth improving/translating?
+  // eslint-disable-next-line @docusaurus/no-untranslated-text
   return <div>Loading...</div>;
 }
 
@@ -91,12 +94,15 @@ export default function Playground({
   } = themeConfig as ThemeConfig;
   const prismTheme = usePrismTheme();
 
+  const noInline = props.metastring?.includes('noInline') ?? false;
+
   return (
     <div className={styles.playgroundContainer}>
       {/* @ts-expect-error: type incompatibility with refs */}
       <LiveProvider
         code={children.replace(/\n$/, '')}
-        transformCode={transformCode || ((code) => `${code};`)}
+        noInline={noInline}
+        transformCode={transformCode ?? ((code) => `${code};`)}
         theme={prismTheme}
         {...props}>
         {playgroundPosition === 'top' ? (

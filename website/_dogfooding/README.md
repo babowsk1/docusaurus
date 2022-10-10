@@ -11,9 +11,8 @@ Eventually, we could move these tests later so another test site? Note there is 
 Fancy things we can test for here:
 
 - Plugin Multi-instance
-- Symlinks support
 - Webpack configs
 - \_ prefix convention
 - Huge sidebars impact
 - Using folders with spaces on purpose
-- Importing md docs that are out of content plugin folders as partials (such as this README file!)
+- Importing MD docs that are out of content plugin folders as partials (such as this README file!)

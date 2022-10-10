@@ -51,13 +51,13 @@ describe('handleBrokenLinks', () => {
   const linkToEmptyFolder2 = '/emptyFolder/';
   const allCollectedLinks = {
     '/docs/good doc with space': [
-      // good - valid file with spaces in name
+      // Good - valid file with spaces in name
       './another%20good%20doc%20with%20space',
-      // good - valid file with percent-20 in its name
+      // Good - valid file with percent-20 in its name
       './weird%20but%20good',
-      // bad - non-existent file with spaces in name
+      // Bad - non-existent file with spaces in name
       './some%20other%20non-existent%20doc1',
-      // evil - trying to use ../../ but '/' won't get decoded
+      // Evil - trying to use ../../ but '/' won't get decoded
       // cSpell:ignore Fout
       './break%2F..%2F..%2Fout2',
     ],
@@ -91,11 +91,11 @@ describe('handleBrokenLinks', () => {
       linkToHtmlFile2,
       linkToJavadoc3,
       linkToJavadoc4,
-      linkToEmptyFolder1, // not filtered!
+      linkToEmptyFolder1, // Not filtered!
     ],
     '/page2': [
       link2,
-      linkToEmptyFolder2, // not filtered!
+      linkToEmptyFolder2, // Not filtered!
       linkToJavadoc2,
       link3,
       linkToJavadoc3,
@@ -107,7 +107,7 @@ describe('handleBrokenLinks', () => {
 
   it('do not report anything for correct paths', async () => {
     const consoleMock = jest
-      .spyOn(console, 'error')
+      .spyOn(console, 'warn')
       .mockImplementation(() => {});
     const allCollectedCorrectLinks = {
       '/docs/good doc with space': [
@@ -136,12 +136,12 @@ describe('handleBrokenLinks', () => {
     };
     await handleBrokenLinks({
       allCollectedLinks: allCollectedCorrectLinks,
-      onBrokenLinks: 'error',
+      onBrokenLinks: 'warn',
       routes,
       baseUrl: '/',
       outDir,
     });
-    expect(consoleMock).toBeCalledTimes(0);
+    expect(consoleMock).toHaveBeenCalledTimes(0);
   });
 
   it('reports all broken links', async () => {
@@ -167,7 +167,7 @@ describe('handleBrokenLinks', () => {
       baseUrl: '/',
       outDir,
     });
-    expect(lodashMock).toBeCalledTimes(0);
+    expect(lodashMock).toHaveBeenCalledTimes(0);
     lodashMock.mockRestore();
   });
 

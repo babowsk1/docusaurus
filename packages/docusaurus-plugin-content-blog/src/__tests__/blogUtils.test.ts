@@ -6,6 +6,8 @@
  */
 
 import {jest} from '@jest/globals';
+import fs from 'fs-extra';
+import path from 'path';
 import {
   truncate,
   parseBlogFileName,
@@ -14,13 +16,8 @@ import {
   paginateBlogPosts,
   type LinkifyParams,
 } from '../blogUtils';
-import fs from 'fs-extra';
-import path from 'path';
-import type {
-  BlogBrokenMarkdownLink,
-  BlogContentPaths,
-  BlogPost,
-} from '../types';
+import type {BlogBrokenMarkdownLink, BlogContentPaths} from '../types';
+import type {BlogPost} from '@docusaurus/plugin-content-blog';
 
 describe('truncate', () => {
   it('truncates texts', () => {
@@ -213,8 +210,12 @@ describe('linkify', () => {
           permalink: '/blog/2019/01/01/date-matter',
           title: 'date-matter',
         },
-        truncated: false,
+        hasTruncateMarker: false,
+        frontMatter: {},
+        authors: [],
+        formattedDate: '',
       },
+      content: '',
     },
   ];
 

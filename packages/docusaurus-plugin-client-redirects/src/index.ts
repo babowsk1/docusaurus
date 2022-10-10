@@ -5,21 +5,20 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type {LoadContext, Plugin} from '@docusaurus/types';
-import type {PluginContext, RedirectMetadata} from './types';
-import type {PluginOptions} from '@docusaurus/plugin-client-redirects';
-
+import {removePrefix, addLeadingSlash} from '@docusaurus/utils';
 import collectRedirects from './collectRedirects';
 import writeRedirectFiles, {
-  toRedirectFilesMetadata,
-  type RedirectFileMetadata,
+  toRedirectFiles,
+  type RedirectFile,
 } from './writeRedirectFiles';
-import {removePrefix, addLeadingSlash} from '@docusaurus/utils';
+import type {LoadContext, Plugin} from '@docusaurus/types';
+import type {PluginContext, RedirectItem} from './types';
+import type {PluginOptions, Options} from './options';
 
 export default function pluginClientRedirectsPages(
   context: LoadContext,
   options: PluginOptions,
-): Plugin<unknown> {
+): Plugin<void> {
   const {trailingSlash} = context.siteConfig;
 
   return {
@@ -32,14 +31,15 @@ export default function pluginClientRedirectsPages(
         baseUrl: props.baseUrl,
         outDir: props.outDir,
         options,
+        siteConfig: props.siteConfig,
       };
 
-      const redirects: RedirectMetadata[] = collectRedirects(
+      const redirects: RedirectItem[] = collectRedirects(
         pluginContext,
         trailingSlash,
       );
 
-      const redirectFiles: RedirectFileMetadata[] = toRedirectFilesMetadata(
+      const redirectFiles: RedirectFile[] = toRedirectFiles(
         redirects,
         pluginContext,
         trailingSlash,
@@ -52,3 +52,4 @@ export default function pluginClientRedirectsPages(
 }
 
 export {validateOptions} from './options';
+export type {PluginOptions, Options};

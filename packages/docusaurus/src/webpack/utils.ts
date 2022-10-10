@@ -5,6 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import fs from 'fs-extra';
+import path from 'path';
+import crypto from 'crypto';
+import logger from '@docusaurus/logger';
+import {BABEL_CONFIG_FILE_NAME} from '@docusaurus/utils';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
 import {
   mergeWithCustomize,
@@ -16,20 +21,15 @@ import webpack, {
   type RuleSetRule,
   type WebpackPluginInstance,
 } from 'webpack';
-import fs from 'fs-extra';
 import TerserPlugin from 'terser-webpack-plugin';
-import type {CustomOptions, CssNanoOptions} from 'css-minimizer-webpack-plugin';
 import CssMinimizerPlugin from 'css-minimizer-webpack-plugin';
-import path from 'path';
-import crypto from 'crypto';
-import logger from '@docusaurus/logger';
+import type {CustomOptions, CssNanoOptions} from 'css-minimizer-webpack-plugin';
 import type {TransformOptions} from '@babel/core';
 import type {
   Plugin,
   PostCssOptions,
   ConfigureWebpackUtils,
 } from '@docusaurus/types';
-import {BABEL_CONFIG_FILE_NAME} from '@docusaurus/utils';
 
 // Utility method to get style loaders
 export function getStyleLoaders(
@@ -185,13 +185,11 @@ export function applyConfigureWebpack(
   if (typeof configureWebpack === 'function') {
     const {mergeStrategy, ...res} =
       configureWebpack(config, isServer, utils, content) ?? {};
-    if (res && typeof res === 'object') {
-      const customizeRules = mergeStrategy ?? {};
-      return mergeWithCustomize({
-        customizeArray: customizeArray(customizeRules),
-        customizeObject: customizeObject(customizeRules),
-      })(config, res);
-    }
+    const customizeRules = mergeStrategy ?? {};
+    return mergeWithCustomize({
+      customizeArray: customizeArray(customizeRules),
+      customizeObject: customizeObject(customizeRules),
+    })(config, res);
   }
   return config;
 }
@@ -200,11 +198,11 @@ export function applyConfigurePostCss(
   configurePostCss: NonNullable<Plugin['configurePostCss']>,
   config: Configuration,
 ): Configuration {
-  type LocalPostCSSLoader = unknown & {
+  type LocalPostCSSLoader = object & {
     options: {postcssOptions: PostCssOptions};
   };
 
-  // not ideal heuristic but good enough for our use-case?
+  // Not ideal heuristic but good enough for our use-case?
   function isPostCssLoader(loader: unknown): loader is LocalPostCSSLoader {
     return !!(loader as LocalPostCSSLoader)?.options?.postcssOptions;
   }
@@ -243,13 +241,13 @@ export function compile(config: Configuration[]): Promise<void> {
     const compiler = webpack(config);
     compiler.run((err, stats) => {
       if (err) {
-        logger.error(err.stack || err);
+        logger.error(err.stack ?? err);
         if (err.details) {
           logger.error(err.details);
         }
         reject(err);
       }
-      // let plugins consume all the stats
+      // Let plugins consume all the stats
       const errorsWarnings = stats?.toJson('errors-warnings');
       if (stats?.hasErrors()) {
         reject(new Error('Failed to compile with errors.'));
@@ -291,20 +289,16 @@ function validateKeyAndCerts({
     // publicEncrypt will throw an error with an invalid cert
     encrypted = crypto.publicEncrypt(cert, Buffer.from('test'));
   } catch (err) {
-    throw new Error(
-      `The certificate ${crtFile} is invalid.
-${err}`,
-    );
+    logger.error`The certificate path=${crtFile} is invalid.`;
+    throw err;
   }
 
   try {
     // privateDecrypt will throw an error with an invalid key
     crypto.privateDecrypt(key, encrypted);
   } catch (err) {
-    throw new Error(
-      `The certificate key ${keyFile} is invalid.
-${err}`,
-    );
+    logger.error`The certificate key path=${keyFile} is invalid.`;
+    throw err;
   }
 }
 
@@ -363,7 +357,7 @@ export function getMinimizer(
       parallel: getTerserParallel(),
       terserOptions: {
         parse: {
-          // we want uglify-js to parse ecma 8 code. However, we don't want it
+          // We want uglify-js to parse ecma 8 code. However, we don't want it
           // to apply any minification steps that turns valid ecma 5 code
           // into invalid ecma 5 code. This is why the 'compress' and 'output'
           // sections only apply transformations that are ecma 5 safe
