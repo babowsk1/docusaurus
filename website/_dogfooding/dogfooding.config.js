@@ -5,8 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-const fs = require('fs');
-
 /** @type {import('@docusaurus/types').PluginConfig[]} */
 const dogfoodingThemeInstances = [
   /** @type {import('@docusaurus/types').PluginModule} */
@@ -22,18 +20,22 @@ exports.dogfoodingThemeInstances = dogfoodingThemeInstances;
 /** @type {import('@docusaurus/types').PluginConfig[]} */
 const dogfoodingPluginInstances = [
   [
-    'content-docs', // dogfood shorthand
+    'content-docs', // Shorthand
     /** @type {import('@docusaurus/plugin-content-docs').Options} */
     ({
       id: 'docs-tests',
       routeBasePath: '/tests/docs',
       sidebarPath: '_dogfooding/docs-tests-sidebars.js',
+      versions: {
+        current: {
+          noIndex: true,
+        },
+      },
 
-      // Using a symlinked folder as source, test for use-case https://github.com/facebook/docusaurus/issues/3272
-      // The target folder uses a _ prefix to test against an edge case regarding MDX partials: https://github.com/facebook/docusaurus/discussions/5181#discussioncomment-1018079
-      // eslint-disable-next-line no-restricted-properties
-      path: fs.realpathSync('_dogfooding/docs-tests-symlink'),
+      // Using a _ prefix to test against an edge case regarding MDX partials: https://github.com/facebook/docusaurus/discussions/5181#discussioncomment-1018079
+      path: '_dogfooding/_docs tests',
       showLastUpdateTime: true,
+      showLastUpdateAuthor: true,
       sidebarItemsGenerator(args) {
         return args.defaultSidebarItemsGenerator({
           ...args,
@@ -52,7 +54,7 @@ const dogfoodingPluginInstances = [
   ],
 
   [
-    '@docusaurus/plugin-content-blog', // dogfood longhand
+    '@docusaurus/plugin-content-blog', // Longhand
     /** @type {import('@docusaurus/plugin-content-blog').Options} */
     ({
       id: 'blog-tests',
@@ -75,7 +77,7 @@ const dogfoodingPluginInstances = [
   ],
 
   [
-    require.resolve('@docusaurus/plugin-content-pages'), // dogfood longhand resolve
+    require.resolve('@docusaurus/plugin-content-pages'), // Full path
     /** @type {import('@docusaurus/plugin-content-pages').Options} */
     ({
       id: 'pages-tests',

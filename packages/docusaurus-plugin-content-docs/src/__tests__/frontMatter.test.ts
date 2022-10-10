@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import escapeStringRegexp from 'escape-string-regexp';
 import {validateDocFrontMatter} from '../frontMatter';
 import type {DocFrontMatter} from '@docusaurus/plugin-content-docs';
-import escapeStringRegexp from 'escape-string-regexp';
 
 function testField(params: {
   prefix: string;
@@ -56,7 +56,9 @@ function testField(params: {
         );
       } catch (err) {
         // eslint-disable-next-line jest/no-conditional-expect
-        expect(err.message).toMatch(new RegExp(escapeStringRegexp(message)));
+        expect((err as Error).message).toMatch(
+          new RegExp(escapeStringRegexp(message)),
+        );
       }
     });
   });
@@ -374,6 +376,71 @@ describe('toc min/max consistency', () => {
       [
         {toc_min_heading_level: 6, toc_max_heading_level: 2},
         '"toc_min_heading_level" must be less than or equal to ref:toc_max_heading_level',
+      ],
+    ],
+  });
+});
+
+describe('validateDocFrontMatter draft', () => {
+  testField({
+    prefix: 'draft',
+    validFrontMatters: [{draft: true}, {draft: false}],
+    convertibleFrontMatter: [
+      [{draft: 'true'}, {draft: true}],
+      [{draft: 'false'}, {draft: false}],
+    ],
+    invalidFrontMatters: [
+      [{draft: 'yes'}, 'must be a boolean'],
+      [{draft: 'no'}, 'must be a boolean'],
+      [{draft: ''}, 'must be a boolean'],
+    ],
+  });
+});
+
+describe('validateDocFrontMatter last_update', () => {
+  testField({
+    prefix: 'last_update',
+    validFrontMatters: [
+      {last_update: undefined},
+      {last_update: {author: 'test author', date: undefined}},
+      {last_update: {author: undefined, date: '1/1/2000'}},
+      {last_update: {author: undefined, date: new Date('1/1/2000')}},
+      {last_update: {author: 'test author', date: '1/1/2000'}},
+      {last_update: {author: 'test author', date: '1995-12-17T03:24:00'}},
+      {last_update: {author: undefined, date: 'December 17, 1995 03:24:00'}},
+    ],
+    invalidFrontMatters: [
+      [
+        {last_update: null},
+        'does not look like a valid front matter FileChange object. Please use a FileChange object (with an author and/or date).',
+      ],
+      [
+        {last_update: {}},
+        'does not look like a valid front matter FileChange object. Please use a FileChange object (with an author and/or date).',
+      ],
+      [
+        {last_update: ''},
+        'does not look like a valid front matter FileChange object. Please use a FileChange object (with an author and/or date).',
+      ],
+      [
+        {last_update: {invalid: 'key'}},
+        'does not look like a valid front matter FileChange object. Please use a FileChange object (with an author and/or date).',
+      ],
+      [
+        {last_update: {author: 'test author', date: 'I am not a date :('}},
+        'must be a valid date',
+      ],
+      [
+        {last_update: {author: 'test author', date: '2011-10-45'}},
+        'must be a valid date',
+      ],
+      [
+        {last_update: {author: 'test author', date: '2011-0-10'}},
+        'must be a valid date',
+      ],
+      [
+        {last_update: {author: 'test author', date: ''}},
+        'must be a valid date',
       ],
     ],
   });

@@ -5,9 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import {isValidPathname, DEFAULT_PLUGIN_ID, type Tag} from '@docusaurus/utils';
 import Joi from './Joi';
-import {isValidPathname, DEFAULT_PLUGIN_ID} from '@docusaurus/utils';
-import type {Tag} from '@docusaurus/types';
 import {JoiFrontMatter} from './JoiFrontMatter';
 
 export const PluginIdSchema = Joi.string()
@@ -33,7 +32,35 @@ const MarkdownPluginsSchema = Joi.array()
 export const RemarkPluginsSchema = MarkdownPluginsSchema;
 export const RehypePluginsSchema = MarkdownPluginsSchema;
 
-export const AdmonitionsSchema = Joi.object().default({});
+const LegacyAdmonitionConfigSchema = Joi.forbidden().messages({
+  'any.unknown': `The Docusaurus admonitions system has changed, and the option {#label} does not exist anymore.
+You now need to swizzle the admonitions component to provide UI customizations such as icons.
+Please refer to https://github.com/facebook/docusaurus/pull/7152 for detailed upgrade instructions.`,
+});
+
+export const AdmonitionsSchema = JoiFrontMatter.alternatives()
+  .try(
+    JoiFrontMatter.boolean().required(),
+    JoiFrontMatter.object({
+      tag: JoiFrontMatter.string(),
+      keywords: JoiFrontMatter.array().items(
+        JoiFrontMatter.string(),
+        // Apparently this is how we tell job to accept empty arrays...
+        // .required(),
+      ),
+      extendDefaults: JoiFrontMatter.boolean(),
+
+      // TODO Remove before 2023
+      customTypes: LegacyAdmonitionConfigSchema,
+      icons: LegacyAdmonitionConfigSchema,
+      infima: LegacyAdmonitionConfigSchema,
+    }).required(),
+  )
+  .default(true)
+  .messages({
+    'alternatives.types':
+      '{{#label}} does not look like a valid admonitions config',
+  });
 
 // TODO how can we make this emit a custom error message :'(
 //  Joi is such a pain, good luck to annoying trying to improve this
@@ -41,10 +68,13 @@ export const URISchema = Joi.alternatives(
   Joi.string().uri({allowRelative: true}),
   // This custom validation logic is required notably because Joi does not
   // accept paths like /a/b/c ...
-  Joi.custom((val, helpers) => {
+  Joi.custom((val: unknown, helpers) => {
+    if (typeof val !== 'string') {
+      return helpers.error('any.invalid');
+    }
     try {
       // eslint-disable-next-line no-new
-      new URL(val);
+      new URL(String(val));
       return val;
     } catch {
       return helpers.error('any.invalid');
@@ -56,7 +86,7 @@ export const URISchema = Joi.alternatives(
 });
 
 export const PathnameSchema = Joi.string()
-  .custom((val) => {
+  .custom((val: string) => {
     if (!isValidPathname(val)) {
       throw new Error();
     }

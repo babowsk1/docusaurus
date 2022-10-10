@@ -17,10 +17,9 @@ import {matchRoutes} from 'react-router-config';
  * @returns Promise object represents whether pathname has been preloaded
  */
 export default function preload(pathname: string): Promise<void[]> {
-  const matches = matchRoutes(routes, pathname);
+  const matches = Array.from(new Set([pathname, decodeURI(pathname)]))
+    .map((p) => matchRoutes(routes, p))
+    .flat();
 
-  return Promise.all(
-    // @ts-expect-error: ComponentCreator injected this method.
-    matches.map((match) => match.route.component?.preload?.()),
-  );
+  return Promise.all(matches.map((match) => match.route.component.preload?.()));
 }

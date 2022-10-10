@@ -6,14 +6,13 @@
  */
 
 import {jest} from '@jest/globals';
+import _ from 'lodash';
 import {
   removeSuffix,
   removePrefix,
   mapAsyncSequential,
   findAsyncSequential,
-  reportMessage,
 } from '../jsUtils';
-import _ from 'lodash';
 
 describe('removeSuffix', () => {
   it("is no-op when suffix doesn't exist", () => {
@@ -58,7 +57,7 @@ describe('mapAsyncSequential', () => {
     const timeBefore = Date.now();
     await expect(
       mapAsyncSequential(items, async (item) => {
-        const itemTimeout = itemToTimeout[item];
+        const itemTimeout = itemToTimeout[item]!;
         itemMapStartsAt[item] = Date.now();
         await sleep(itemTimeout);
         itemMapEndsAt[item] = Date.now();
@@ -72,12 +71,10 @@ describe('mapAsyncSequential', () => {
     const totalTimeouts = _.sum(Object.values(itemToTimeout));
     expect(timeTotal).toBeGreaterThanOrEqual(totalTimeouts - 100);
 
-    expect(itemMapStartsAt['1']).toBeGreaterThanOrEqual(0);
-    expect(itemMapStartsAt['2']).toBeGreaterThanOrEqual(
-      itemMapEndsAt['1'] - 100,
-    );
+    expect(itemMapStartsAt[1]).toBeGreaterThanOrEqual(0);
+    expect(itemMapStartsAt[2]).toBeGreaterThanOrEqual(itemMapEndsAt[1]! - 100);
     expect(itemMapStartsAt['3']).toBeGreaterThanOrEqual(
-      itemMapEndsAt['2'] - 100,
+      itemMapEndsAt[2]! - 100,
     );
   });
 });
@@ -108,42 +105,5 @@ describe('findAsyncSequential', () => {
     const timeTotal = timeAfter - timeBefore;
     expect(timeTotal).toBeGreaterThanOrEqual(600);
     expect(timeTotal).toBeLessThan(1000);
-  });
-});
-
-describe('reportMessage', () => {
-  it('works with all severities', () => {
-    const consoleLog = jest.spyOn(console, 'info').mockImplementation(() => {});
-    const consoleWarn = jest
-      .spyOn(console, 'warn')
-      .mockImplementation(() => {});
-    const consoleError = jest
-      .spyOn(console, 'error')
-      .mockImplementation(() => {});
-    reportMessage('hey', 'ignore');
-    reportMessage('hey', 'log');
-    reportMessage('hey', 'warn');
-    reportMessage('hey', 'error');
-    expect(() =>
-      reportMessage('hey', 'throw'),
-    ).toThrowErrorMatchingInlineSnapshot(`"hey"`);
-    expect(() =>
-      // @ts-expect-error: for test
-      reportMessage('hey', 'foo'),
-    ).toThrowErrorMatchingInlineSnapshot(
-      `"Unexpected "reportingSeverity" value: foo."`,
-    );
-    expect(consoleLog).toBeCalledTimes(1);
-    expect(consoleLog).toBeCalledWith(
-      expect.stringMatching(/.*\[INFO\].* hey/),
-    );
-    expect(consoleWarn).toBeCalledTimes(1);
-    expect(consoleWarn).toBeCalledWith(
-      expect.stringMatching(/.*\[WARNING\].* hey/),
-    );
-    expect(consoleError).toBeCalledTimes(1);
-    expect(consoleError).toBeCalledWith(
-      expect.stringMatching(/.*\[ERROR\].* hey/),
-    );
   });
 });

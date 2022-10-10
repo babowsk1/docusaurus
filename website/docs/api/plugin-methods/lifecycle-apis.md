@@ -11,7 +11,7 @@ During the build, plugins are loaded in parallel to fetch their own contents and
 
 Plugins should use this lifecycle to fetch from data sources (filesystem, remote API, headless CMS, etc.) or do some server processing. The return value is the content it needs.
 
-For example, this plugin below return a random integer between 1 to 10 as content.
+For example, this plugin below returns a random integer between 1 and 10 as content.
 
 ```js title="docusaurus-plugin/src/index.js"
 module.exports = function (context, options) {
@@ -178,7 +178,7 @@ The API of `configureWebpack` will be modified in the future to accept an object
 - `getStyleLoaders(isServer: boolean, cssOptions: {[key: string]: any}): Loader[]`
 - `getJSLoader(isServer: boolean, cacheOptions?: {}): Loader | null`
 
-You may use them to return your webpack configures conditionally.
+You may use them to return your webpack configuration conditionally.
 
 For example, this plugin below modify the webpack config to transpile `.foo` files.
 

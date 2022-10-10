@@ -82,21 +82,19 @@ export function replaceMarkdownLinks<T extends ContentPaths>({
   const brokenMarkdownLinks: BrokenMarkdownLink<T>[] = [];
 
   // Replace internal markdown linking (except in fenced blocks).
-  let fencedBlock = false;
-  let lastCodeFence = '';
+  let lastCodeFence: string | null = null;
   const lines = fileString.split('\n').map((line) => {
-    if (line.trim().startsWith('```')) {
-      const codeFence = line.trim().match(/^`+/)![0]!;
-      if (!fencedBlock) {
-        fencedBlock = true;
+    const codeFence = line.trimStart().match(/^`{3,}|^~{3,}/)?.[0];
+    if (codeFence) {
+      if (!lastCodeFence) {
         lastCodeFence = codeFence;
         // If we are in a ````-fenced block, all ``` would be plain text instead
         // of fences
-      } else if (codeFence.length >= lastCodeFence.length) {
-        fencedBlock = false;
+      } else if (codeFence.startsWith(lastCodeFence)) {
+        lastCodeFence = null;
       }
     }
-    if (fencedBlock) {
+    if (lastCodeFence) {
       return line;
     }
 
@@ -111,12 +109,18 @@ export function replaceMarkdownLinks<T extends ContentPaths>({
       // Replace it to correct html link.
       const mdLink = mdMatch.groups!.filename!;
 
-      const sourcesToTry = [
-        path.dirname(filePath),
-        ...getContentPathList(contentPaths),
-      ].map((p) => path.join(p, decodeURIComponent(mdLink)));
+      const sourcesToTry: string[] = [];
+      // ./file.md and ../file.md are always relative to the current file
+      if (!mdLink.startsWith('./') && !mdLink.startsWith('../')) {
+        sourcesToTry.push(...getContentPathList(contentPaths), siteDir);
+      }
+      // /file.md is always relative to the content path
+      if (!mdLink.startsWith('/')) {
+        sourcesToTry.push(path.dirname(filePath));
+      }
 
       const aliasedSourceMatch = sourcesToTry
+        .map((p) => path.join(p, decodeURIComponent(mdLink)))
         .map((source) => aliasedSitePath(source, siteDir))
         .find((source) => sourceToPermalink[source]);
 
@@ -131,7 +135,13 @@ export function replaceMarkdownLinks<T extends ContentPaths>({
           .split('/')
           .map((part) => part.replace(/\s/g, '%20'))
           .join('/');
-        modifiedLine = modifiedLine.replace(mdLink, encodedPermalink);
+        modifiedLine = modifiedLine.replace(
+          mdMatch[0]!,
+          mdMatch[0]!.replace(mdLink, encodedPermalink),
+        );
+        // Adjust the lastIndex to avoid passing over the next link if the
+        // newly replaced URL is shorter.
+        mdRegex.lastIndex += encodedPermalink.length - mdLink.length;
       } else {
         const brokenMarkdownLink: BrokenMarkdownLink<T> = {
           contentPaths,

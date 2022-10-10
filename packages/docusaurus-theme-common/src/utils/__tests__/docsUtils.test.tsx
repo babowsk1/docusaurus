@@ -7,6 +7,8 @@
 
 import React from 'react';
 import {renderHook} from '@testing-library/react-hooks';
+import {StaticRouter} from 'react-router-dom';
+import {Context} from '@docusaurus/core/src/client/docusaurusContext';
 import {
   findFirstCategoryLink,
   isActiveSidebarItem,
@@ -17,8 +19,6 @@ import {
 } from '../docsUtils';
 import {DocsSidebarProvider} from '../../contexts/docsSidebar';
 import {DocsVersionProvider} from '../../contexts/docsVersion';
-import {StaticRouter} from 'react-router-dom';
-import {Context} from '@docusaurus/core/src/client/docusaurusContext';
 import type {
   PropSidebar,
   PropSidebarItem,
@@ -26,6 +26,7 @@ import type {
   PropSidebarItemLink,
   PropVersionMetadata,
 } from '@docusaurus/plugin-content-docs';
+import type {DocusaurusContext} from '@docusaurus/types';
 
 // Make tests more readable with some useful category item defaults
 function testCategory(
@@ -294,19 +295,22 @@ describe('isActiveSidebarItem', () => {
 
 describe('useSidebarBreadcrumbs', () => {
   const createUseSidebarBreadcrumbsMock =
-    (sidebar: PropSidebar, breadcrumbsOption?: boolean) => (location: string) =>
+    (sidebar: PropSidebar | undefined, breadcrumbsOption?: boolean) =>
+    (location: string) =>
       renderHook(() => useSidebarBreadcrumbs(), {
         wrapper: ({children}) => (
           <StaticRouter location={location}>
             <Context.Provider
-              // eslint-disable-next-line react/jsx-no-constructed-context-values
-              value={{
-                globalData: {
-                  'docusaurus-plugin-content-docs': {
-                    default: {path: '/', breadcrumbs: breadcrumbsOption},
+              value={
+                // eslint-disable-next-line react/jsx-no-constructed-context-values
+                {
+                  globalData: {
+                    'docusaurus-plugin-content-docs': {
+                      default: {path: '/', breadcrumbs: breadcrumbsOption},
+                    },
                   },
-                },
-              }}>
+                } as unknown as DocusaurusContext
+              }>
               <DocsSidebarProvider name="sidebarName" items={sidebar}>
                 {children}
               </DocsSidebarProvider>
@@ -421,7 +425,9 @@ describe('useSidebarBreadcrumbs', () => {
   });
 
   it('returns null when there is no sidebar', () => {
-    expect(createUseSidebarBreadcrumbsMock(null, false)('/foo')).toBeNull();
+    expect(
+      createUseSidebarBreadcrumbsMock(undefined, false)('/foo'),
+    ).toBeNull();
   });
 });
 
@@ -435,26 +441,93 @@ describe('useCurrentSidebarCategory', () => {
           </DocsSidebarProvider>
         ),
       }).result.current;
-  it('works', () => {
-    const category = {
-      type: 'category',
+
+  it('works for sidebar category', () => {
+    const category: PropSidebarItemCategory = testCategory({
       href: '/cat',
-      items: [
-        {type: 'link', href: '/cat/foo', label: 'Foo'},
-        {type: 'link', href: '/cat/bar', label: 'Bar'},
-        {type: 'link', href: '/baz', label: 'Baz'},
-      ],
-    };
-    const mockUseCurrentSidebarCategory = createUseCurrentSidebarCategoryMock([
-      {type: 'link', href: '/cat/fake', label: 'Fake'},
+    });
+    const sidebar: PropSidebar = [
+      testLink(),
+      testLink(),
       category,
-    ]);
+      testCategory(),
+    ];
+
+    const mockUseCurrentSidebarCategory =
+      createUseCurrentSidebarCategoryMock(sidebar);
+
     expect(mockUseCurrentSidebarCategory('/cat')).toEqual(category);
   });
 
+  it('works for nested sidebar category', () => {
+    const category2: PropSidebarItemCategory = testCategory({
+      href: '/cat2',
+    });
+    const category1: PropSidebarItemCategory = testCategory({
+      href: '/cat1',
+      items: [testLink(), testLink(), category2, testCategory()],
+    });
+    const sidebar: PropSidebar = [
+      testLink(),
+      testLink(),
+      category1,
+      testCategory(),
+    ];
+
+    const mockUseCurrentSidebarCategory =
+      createUseCurrentSidebarCategoryMock(sidebar);
+
+    expect(mockUseCurrentSidebarCategory('/cat2')).toEqual(category2);
+  });
+
+  it('works for category link item', () => {
+    const link = testLink({href: '/my/link/path'});
+    const category: PropSidebarItemCategory = testCategory({
+      href: '/cat1',
+      items: [testLink(), testLink(), link, testCategory()],
+    });
+    const sidebar: PropSidebar = [
+      testLink(),
+      testLink(),
+      category,
+      testCategory(),
+    ];
+
+    const mockUseCurrentSidebarCategory =
+      createUseCurrentSidebarCategoryMock(sidebar);
+
+    expect(mockUseCurrentSidebarCategory('/my/link/path')).toEqual(category);
+  });
+
+  it('works for nested category link item', () => {
+    const link = testLink({href: '/my/link/path'});
+    const category2: PropSidebarItemCategory = testCategory({
+      href: '/cat2',
+      items: [testLink(), testLink(), link, testCategory()],
+    });
+    const category1: PropSidebarItemCategory = testCategory({
+      href: '/cat1',
+      items: [testLink(), testLink(), category2, testCategory()],
+    });
+    const sidebar: PropSidebar = [
+      testLink(),
+      testLink(),
+      category1,
+      testCategory(),
+    ];
+
+    const mockUseCurrentSidebarCategory =
+      createUseCurrentSidebarCategoryMock(sidebar);
+
+    expect(mockUseCurrentSidebarCategory('/my/link/path')).toEqual(category2);
+  });
+
   it('throws for non-category index page', () => {
-    const category = {
+    const category: PropSidebarItemCategory = {
       type: 'category',
+      label: 'Category',
+      collapsible: true,
+      collapsed: false,
       items: [
         {type: 'link', href: '/cat/foo', label: 'Foo'},
         {type: 'link', href: '/cat/bar', label: 'Bar'},

@@ -5,8 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {docuHash, generate} from '@docusaurus/utils';
 import path from 'path';
+import _ from 'lodash';
+import {docuHash, generate} from '@docusaurus/utils';
+import {initPlugins} from './init';
+import {createBootstrapPlugin, createMDXFallbackPlugin} from './synthetic';
+import {localizePluginTranslationFile} from '../translations/translations';
+import {applyRouteTrailingSlash, sortConfig} from './routeConfig';
 import type {
   LoadContext,
   PluginContentLoadedActions,
@@ -17,12 +22,6 @@ import type {
   InitializedPlugin,
   PluginRouteContext,
 } from '@docusaurus/types';
-import {initPlugins} from './init';
-import {createBootstrapPlugin, createMDXFallbackPlugin} from './synthetic';
-import logger from '@docusaurus/logger';
-import _ from 'lodash';
-import {localizePluginTranslationFile} from '../translations/translations';
-import {applyRouteTrailingSlash, sortConfig} from './routeConfig';
 
 /**
  * Initializes the plugins, runs `loadContent`, `translateContent`,
@@ -53,12 +52,11 @@ export async function loadPlugins(context: LoadContext): Promise<{
     plugins.map(async (plugin) => {
       const content = await plugin.loadContent?.();
       const rawTranslationFiles =
-        (await plugin?.getTranslationFiles?.({content})) ?? [];
+        (await plugin.getTranslationFiles?.({content})) ?? [];
       const translationFiles = await Promise.all(
         rawTranslationFiles.map((translationFile) =>
           localizePluginTranslationFile({
-            locale: context.i18n.currentLocale,
-            siteDir: context.siteDir,
+            localizationDir: context.localizationDir,
             translationFile,
             plugin,
           }),
@@ -98,7 +96,7 @@ export async function loadPlugins(context: LoadContext): Promise<{
         return;
       }
       const pluginId = plugin.options.id;
-      // plugins data files are namespaced by pluginName/pluginId
+      // Plugins data files are namespaced by pluginName/pluginId
       const dataDir = path.join(
         context.generatedFilesDir,
         plugin.name,
@@ -144,21 +142,6 @@ export async function loadPlugins(context: LoadContext): Promise<{
       };
 
       await plugin.contentLoaded({content, actions, allContent});
-    }),
-  );
-
-  // 4. Plugin Lifecycle - routesLoaded.
-  await Promise.all(
-    loadedPlugins.map(async (plugin) => {
-      if (!plugin.routesLoaded) {
-        return;
-      }
-
-      // TODO alpha-60: remove this deprecated lifecycle soon
-      // 1 user reported usage of this lifecycle: https://github.com/facebook/docusaurus/issues/3918
-      logger.error`Plugin code=${'routesLoaded'} lifecycle is deprecated. If you think we should keep this lifecycle, please report here: url=${'https://github.com/facebook/docusaurus/issues/3918'}`;
-
-      await plugin.routesLoaded(pluginsRouteConfigs);
     }),
   );
 

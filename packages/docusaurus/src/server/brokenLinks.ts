@@ -5,20 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {matchRoutes} from 'react-router-config';
 import fs from 'fs-extra';
-import _ from 'lodash';
-import type {RouteConfig, ReportingSeverity} from '@docusaurus/types';
-import {
-  removePrefix,
-  removeSuffix,
-  reportMessage,
-  resolvePathname,
-} from '@docusaurus/utils';
-import {getAllFinalRoutes} from './utils';
 import path from 'path';
-import combinePromises from 'combine-promises';
+import _ from 'lodash';
 import logger from '@docusaurus/logger';
+import combinePromises from 'combine-promises';
+import {matchRoutes} from 'react-router-config';
+import {removePrefix, removeSuffix, resolvePathname} from '@docusaurus/utils';
+import {getAllFinalRoutes} from './utils';
+import type {RouteConfig, ReportingSeverity} from '@docusaurus/types';
 
 type BrokenLink = {
   link: string;
@@ -84,7 +79,6 @@ function getAllBrokenLinks({
     getPageBrokenLinks({pageLinks, pagePath, routes: filteredRoutes}),
   );
 
-  // remove pages without any broken link
   return _.pickBy(allBrokenLinks, (brokenLinks) => brokenLinks.length > 0);
 }
 
@@ -248,6 +242,6 @@ export async function handleBrokenLinks({
 
   const errorMessage = getBrokenLinksErrorMessage(allBrokenLinks);
   if (errorMessage) {
-    reportMessage(errorMessage, onBrokenLinks);
+    logger.report(onBrokenLinks)(errorMessage);
   }
 }

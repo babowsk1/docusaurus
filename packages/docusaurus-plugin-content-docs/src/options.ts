@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type {PluginOptions, Options} from '@docusaurus/plugin-content-docs';
+import logger from '@docusaurus/logger';
 import {
   Joi,
   RemarkPluginsSchema,
@@ -14,15 +14,13 @@ import {
   URISchema,
 } from '@docusaurus/utils-validation';
 import {GlobExcludeDefault} from '@docusaurus/utils';
-
-import type {OptionValidationContext} from '@docusaurus/types';
-import logger from '@docusaurus/logger';
-import admonitions from 'remark-admonitions';
 import {DefaultSidebarItemsGenerator} from './sidebars/generator';
 import {
   DefaultNumberPrefixParser,
   DisabledNumberPrefixParser,
 } from './numberPrefix';
+import type {OptionValidationContext} from '@docusaurus/types';
+import type {PluginOptions, Options} from '@docusaurus/plugin-content-docs';
 
 export const DEFAULT_OPTIONS: Omit<PluginOptions, 'id' | 'sidebarPath'> = {
   path: 'docs', // Path to data on filesystem, relative to site dir.
@@ -32,7 +30,9 @@ export const DEFAULT_OPTIONS: Omit<PluginOptions, 'id' | 'sidebarPath'> = {
   exclude: GlobExcludeDefault,
   sidebarItemsGenerator: DefaultSidebarItemsGenerator,
   numberPrefixParser: DefaultNumberPrefixParser,
-  docLayoutComponent: '@theme/DocPage',
+  docsRootComponent: '@theme/DocsRoot',
+  docVersionRootComponent: '@theme/DocVersionRoot',
+  docRootComponent: '@theme/DocRoot',
   docItemComponent: '@theme/DocItem',
   docTagDocListComponent: '@theme/DocTagDocListPage',
   docTagsListComponent: '@theme/DocTagsListPage',
@@ -43,7 +43,7 @@ export const DEFAULT_OPTIONS: Omit<PluginOptions, 'id' | 'sidebarPath'> = {
   beforeDefaultRehypePlugins: [],
   showLastUpdateTime: false,
   showLastUpdateAuthor: false,
-  admonitions: {},
+  admonitions: true,
   includeCurrentVersion: true,
   disableVersioning: false,
   lastVersion: undefined,
@@ -61,6 +61,7 @@ const VersionOptionsSchema = Joi.object({
   banner: Joi.string().equal('none', 'unreleased', 'unmaintained').optional(),
   badge: Joi.boolean().optional(),
   className: Joi.string().optional(),
+  noIndex: Joi.boolean().optional(),
 });
 
 const VersionsOptionsSchema = Joi.object()
@@ -99,13 +100,17 @@ const OptionsSchema = Joi.object<PluginOptions>({
       Joi.function(),
       // Convert boolean values to functions
       Joi.alternatives().conditional(Joi.boolean(), {
-        then: Joi.custom((val) =>
+        then: Joi.custom((val: boolean) =>
           val ? DefaultNumberPrefixParser : DisabledNumberPrefixParser,
         ),
       }),
     )
     .default(() => DEFAULT_OPTIONS.numberPrefixParser),
-  docLayoutComponent: Joi.string().default(DEFAULT_OPTIONS.docLayoutComponent),
+  docsRootComponent: Joi.string().default(DEFAULT_OPTIONS.docsRootComponent),
+  docVersionRootComponent: Joi.string().default(
+    DEFAULT_OPTIONS.docVersionRootComponent,
+  ),
+  docRootComponent: Joi.string().default(DEFAULT_OPTIONS.docRootComponent),
   docItemComponent: Joi.string().default(DEFAULT_OPTIONS.docItemComponent),
   docTagsListComponent: Joi.string().default(
     DEFAULT_OPTIONS.docTagsListComponent,
@@ -124,9 +129,7 @@ const OptionsSchema = Joi.object<PluginOptions>({
   beforeDefaultRehypePlugins: RehypePluginsSchema.default(
     DEFAULT_OPTIONS.beforeDefaultRehypePlugins,
   ),
-  admonitions: Joi.alternatives()
-    .try(AdmonitionsSchema, Joi.boolean().invalid(true))
-    .default(DEFAULT_OPTIONS.admonitions),
+  admonitions: AdmonitionsSchema.default(DEFAULT_OPTIONS.admonitions),
   showLastUpdateTime: Joi.bool().default(DEFAULT_OPTIONS.showLastUpdateTime),
   showLastUpdateAuthor: Joi.bool().default(
     DEFAULT_OPTIONS.showLastUpdateAuthor,
@@ -166,13 +169,7 @@ export function validateOptions({
     }
   }
 
-  const normalizedOptions = validate(OptionsSchema, options) as PluginOptions;
-
-  if (normalizedOptions.admonitions) {
-    normalizedOptions.remarkPlugins = normalizedOptions.remarkPlugins.concat([
-      [admonitions, normalizedOptions.admonitions],
-    ]);
-  }
+  const normalizedOptions = validate(OptionsSchema, options);
 
   return normalizedOptions;
 }

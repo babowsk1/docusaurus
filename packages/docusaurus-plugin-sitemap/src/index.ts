@@ -7,8 +7,9 @@
 
 import fs from 'fs-extra';
 import path from 'path';
-import type {PluginOptions} from '@docusaurus/plugin-sitemap';
+import logger from '@docusaurus/logger';
 import createSitemap from './createSitemap';
+import type {PluginOptions, Options} from './options';
 import type {LoadContext, Plugin} from '@docusaurus/types';
 
 export default function pluginSitemap(
@@ -18,7 +19,7 @@ export default function pluginSitemap(
   return {
     name: 'docusaurus-plugin-sitemap',
 
-    async postBuild({siteConfig, routesPaths, outDir}) {
+    async postBuild({siteConfig, routesPaths, outDir, head}) {
       if (siteConfig.noIndex) {
         return;
       }
@@ -26,18 +27,24 @@ export default function pluginSitemap(
       const generatedSitemap = await createSitemap(
         siteConfig,
         routesPaths,
+        head,
         options,
       );
+      if (!generatedSitemap) {
+        return;
+      }
 
       // Write sitemap file.
-      const sitemapPath = path.join(outDir, 'sitemap.xml');
+      const sitemapPath = path.join(outDir, options.filename);
       try {
         await fs.outputFile(sitemapPath, generatedSitemap);
       } catch (err) {
-        throw new Error(`Writing sitemap failed: ${err}`);
+        logger.error('Writing sitemap failed.');
+        throw err;
       }
     },
   };
 }
 
 export {validateOptions} from './options';
+export type {PluginOptions, Options};

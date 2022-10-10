@@ -21,8 +21,10 @@ const isWindows = () => process.platform === 'win32';
 export const isNameTooLong = (str: string): boolean =>
   // Not entirely correct: we can't assume FS from OS. But good enough?
   isMacOs() || isWindows()
-    ? str.length + SPACE_FOR_APPENDING > MAX_PATH_SEGMENT_CHARS // macOS (APFS) and Windows (NTFS) filename length limit (255 chars)
-    : Buffer.from(str).length + SPACE_FOR_APPENDING > MAX_PATH_SEGMENT_BYTES; // Other (255 bytes)
+    ? // Windows (NTFS) and macOS (APFS) filename length limit (255 chars)
+      str.length + SPACE_FOR_APPENDING > MAX_PATH_SEGMENT_CHARS
+    : // Other (255 bytes)
+      Buffer.from(str).length + SPACE_FOR_APPENDING > MAX_PATH_SEGMENT_BYTES;
 
 export function shortName(str: string): string {
   if (isMacOs() || isWindows()) {
@@ -54,14 +56,9 @@ export function shortName(str: string): string {
  * Adopted from https://github.com/sindresorhus/slash/blob/main/index.js
  */
 export function posixPath(str: string): string {
-  const isExtendedLengthPath = /^\\\\\?\\/.test(str);
+  const isExtendedLengthPath = str.startsWith('\\\\?\\');
 
-  // Forward slashes are only valid Windows paths when they don't contain non-
-  // ascii characters.
-  // eslint-disable-next-line no-control-regex
-  const hasNonAscii = /[^\u0000-\u0080]+/.test(str);
-
-  if (isExtendedLengthPath || hasNonAscii) {
+  if (isExtendedLengthPath) {
     return str;
   }
   return str.replace(/\\/g, '/');
@@ -117,5 +114,5 @@ export function addTrailingPathSeparator(str: string): string {
   return str.endsWith(path.sep)
     ? str
     : // If this is Windows, we need to change the forward slash to backward
-      `${str.replace(/\/$/, '')}${path.sep}`;
+      `${str.replace(/[\\/]$/, '')}${path.sep}`;
 }
