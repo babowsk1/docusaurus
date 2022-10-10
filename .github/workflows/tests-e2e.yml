@@ -4,13 +4,32 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - website/**
+      - docusaurus-v**
+    paths:
+      - package.json
+      - yarn.lock
+      - jest.config.mjs
+      - packages/**
+      - tsconfig.json
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - website/**
+      - docusaurus-v**
+    paths:
+      - package.json
+      - yarn.lock
+      - jest.config.mjs
+      - packages/**
+      - tsconfig.json
+      - admin/verdaccio.yaml
+      - .github/workflows/tests-e2e.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   yarn-v1:
@@ -19,11 +38,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: ['14', '16', '17']
+        node: ['16.14', '16', '18']
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b # v3
       - name: Use Node.js ${{ matrix.node }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@969bd2663942d722d85b6a8626225850c2f7be4b # v3
         with:
           node-version: ${{ matrix.node }}
           cache: yarn
@@ -53,15 +73,11 @@ jobs:
       matrix:
         nodeLinker: [pnp, node-modules]
         variant: [-s, -st]
-        exclude:
-          # Running tsc on PnP requires additional installations, which is not
-          # worthwhile for a simple E2E test
-          - variant: -st
-            nodeLinker: pnp
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b # v3
       - name: Use Node.js 16
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@969bd2663942d722d85b6a8626225850c2f7be4b # v3
         with:
           node-version: '16'
           cache: yarn
@@ -86,13 +102,21 @@ jobs:
         working-directory: ../test-website
         env:
           YARN_ENABLE_IMMUTABLE_INSTALLS: false # Yarn berry should create the lockfile, despite CI env
+      - name: Install missing dependencies
+        if: matrix.variant == '-st' && matrix.nodeLinker == 'pnp'
+        run: |
+          # These dependencies are referenced in the init project, not by our packages
+          yarn add @docusaurus/theme-classic @docusaurus/types @types/node
+          yarn config set packageExtensions --json '{ "unified@^9.2.2": { "dependencies": { "@types/unist": "^2.0.6" } } }'
+        working-directory: ../test-website
       - name: Start test-website project
         run: yarn start --no-open
         working-directory: ../test-website
         env:
           E2E_TEST: true
       - name: Type check
-        if: matrix.variant == '-st'
+        # TODO: there're some lingering issues with PnP + tsc. Enable tsc in PnP later.
+        if: matrix.variant == '-st' && matrix.nodeLinker != 'pnp'
         run: yarn typecheck
         working-directory: ../test-website
       - name: Build test-website project
@@ -104,9 +128,10 @@ jobs:
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b # v3
       - name: Use Node.js 16
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@969bd2663942d722d85b6a8626225850c2f7be4b # v3
         with:
           node-version: '16'
           cache: yarn
@@ -133,9 +158,10 @@ jobs:
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b # v3
       - name: Use Node.js 16
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@969bd2663942d722d85b6a8626225850c2f7be4b # v3
         with:
           node-version: '16'
           cache: yarn
@@ -145,13 +171,14 @@ jobs:
         run: yarn test:build:website -s
       - name: Install test-website project with pnpm
         run: |
-          curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm
-          pnpm install
+          npm install -g pnpm
+          # Fix some peer dependencies errors
+          pnpm add @algolia/client-search @types/react@17 typescript
         working-directory: ../test-website
         env:
           npm_config_registry: http://localhost:4873
       - name: Start test-website project
-        run: pnpm run start -- --no-open
+        run: pnpm start --no-open
         working-directory: ../test-website
         env:
           E2E_TEST: true

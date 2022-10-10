@@ -6,10 +6,11 @@
  */
 
 declare module '@docusaurus/plugin-content-blog' {
+  import type {LoadedMDXContent} from '@docusaurus/mdx-loader';
   import type {MDXOptions} from '@docusaurus/mdx-loader';
-  import type {FrontMatterTag} from '@docusaurus/utils';
+  import type {FrontMatterTag, Tag} from '@docusaurus/utils';
+  import type {Plugin, LoadContext} from '@docusaurus/types';
   import type {Overwrite} from 'utility-types';
-  import type {Tag} from '@docusaurus/types';
 
   export type Assets = {
     /**
@@ -201,7 +202,7 @@ declare module '@docusaurus/plugin-content-blog' {
     /**
      * Whether the truncate marker exists in the post's content.
      */
-    readonly truncated?: boolean;
+    readonly hasTruncateMarker: boolean;
     /**
      * Used in pagination. Generated after the other metadata, so not readonly.
      * Content is just a subset of another post's metadata.
@@ -377,7 +378,6 @@ declare module '@docusaurus/plugin-content-blog' {
      * unlocalized file. Ignored when `editUrl` is a function.
      */
     editLocalizedFiles?: boolean;
-    admonitions: {[key: string]: unknown};
     /** Path to the authors map file, relative to the blog content directory. */
     authorsMapPath: string;
     /** A callback to customize the reading time number displayed. */
@@ -411,45 +411,32 @@ declare module '@docusaurus/plugin-content-blog' {
     title: string;
     items: {title: string; permalink: string}[];
   };
-}
 
-declare module '@theme/BlogPostPage' {
-  import type {LoadedMDXContent} from '@docusaurus/mdx-loader';
-  import type {
-    BlogPostFrontMatter,
-    BlogPostMetadata,
-    Assets,
-    BlogSidebar,
-  } from '@docusaurus/plugin-content-blog';
-  import type {Overwrite} from 'utility-types';
+  export type BlogContent = {
+    blogSidebarTitle: string;
+    blogPosts: BlogPost[];
+    blogListPaginated: BlogPaginated[];
+    blogTags: BlogTags;
+    blogTagsListPath: string;
+  };
 
-  export type FrontMatter = BlogPostFrontMatter;
+  export type BlogTags = {
+    [permalink: string]: BlogTag;
+  };
 
-  export type Metadata = Overwrite<
-    BlogPostMetadata,
-    {
-      /** The publish date of the post. Serialized from the `Date` object. */
-      date: string;
-    }
-  >;
+  export type BlogTag = Tag & {
+    /** Blog post permalinks. */
+    items: string[];
+    pages: BlogPaginated[];
+  };
 
-  export type Content = LoadedMDXContent<FrontMatter, Metadata, Assets>;
+  export type BlogPost = {
+    id: string;
+    metadata: BlogPostMetadata;
+    content: string;
+  };
 
-  export interface Props {
-    /** Blog sidebar. */
-    readonly sidebar: BlogSidebar;
-    /** Content of this post as an MDX component, with useful metadata. */
-    readonly content: Content;
-  }
-
-  export default function BlogPostPage(props: Props): JSX.Element;
-}
-
-declare module '@theme/BlogListPage' {
-  import type {Content} from '@theme/BlogPostPage';
-  import type {BlogSidebar} from '@docusaurus/plugin-content-blog';
-
-  export type Metadata = {
+  export type BlogPaginatedMetadata = {
     /** Title of the entire blog. */
     readonly blogTitle: string;
     /** Blog description. */
@@ -470,11 +457,69 @@ declare module '@theme/BlogListPage' {
     readonly totalPages: number;
   };
 
+  export type BlogPaginated = {
+    metadata: BlogPaginatedMetadata;
+    /** Blog post permalinks. */
+    items: string[];
+  };
+
+  type PropBlogPostMetadata = Overwrite<
+    BlogPostMetadata,
+    {
+      /** The publish date of the post. Serialized from the `Date` object. */
+      date: string;
+    }
+  >;
+
+  export type PropBlogPostContent = LoadedMDXContent<
+    BlogPostFrontMatter,
+    PropBlogPostMetadata,
+    Assets
+  >;
+
+  export default function pluginContentBlog(
+    context: LoadContext,
+    options: PluginOptions,
+  ): Promise<Plugin<BlogContent>>;
+}
+
+declare module '@theme/BlogPostPage' {
+  import type {
+    BlogPostFrontMatter,
+    BlogSidebar,
+    PropBlogPostContent,
+  } from '@docusaurus/plugin-content-blog';
+
+  export type FrontMatter = BlogPostFrontMatter;
+
+  export type Content = PropBlogPostContent;
+
+  export interface Props {
+    /** Blog sidebar. */
+    readonly sidebar: BlogSidebar;
+    /** Content of this post as an MDX component, with useful metadata. */
+    readonly content: Content;
+  }
+
+  export default function BlogPostPage(props: Props): JSX.Element;
+}
+
+declare module '@theme/BlogPostPage/Metadata' {
+  export default function BlogPostPageMetadata(): JSX.Element;
+}
+
+declare module '@theme/BlogListPage' {
+  import type {Content} from '@theme/BlogPostPage';
+  import type {
+    BlogSidebar,
+    BlogPaginatedMetadata,
+  } from '@docusaurus/plugin-content-blog';
+
   export interface Props {
     /** Blog sidebar. */
     readonly sidebar: BlogSidebar;
     /** Metadata of the current listing page. */
-    readonly metadata: Metadata;
+    readonly metadata: BlogPaginatedMetadata;
     /**
      * Array of blog posts included on this page. Every post's metadata is also
      * available.
@@ -487,7 +532,7 @@ declare module '@theme/BlogListPage' {
 
 declare module '@theme/BlogTagsListPage' {
   import type {BlogSidebar} from '@docusaurus/plugin-content-blog';
-  import type {TagsListItem} from '@docusaurus/types';
+  import type {TagsListItem} from '@docusaurus/utils';
 
   export interface Props {
     /** Blog sidebar. */
@@ -500,10 +545,12 @@ declare module '@theme/BlogTagsListPage' {
 }
 
 declare module '@theme/BlogTagsPostsPage' {
-  import type {BlogSidebar} from '@docusaurus/plugin-content-blog';
   import type {Content} from '@theme/BlogPostPage';
-  import type {Metadata} from '@theme/BlogListPage';
-  import type {TagModule} from '@docusaurus/types';
+  import type {
+    BlogSidebar,
+    BlogPaginatedMetadata,
+  } from '@docusaurus/plugin-content-blog';
+  import type {TagModule} from '@docusaurus/utils';
 
   export interface Props {
     /** Blog sidebar. */
@@ -511,7 +558,7 @@ declare module '@theme/BlogTagsPostsPage' {
     /** Metadata of this tag. */
     readonly tag: TagModule;
     /** Looks exactly the same as the posts list page */
-    readonly listMetadata: Metadata;
+    readonly listMetadata: BlogPaginatedMetadata;
     /**
      * Array of blog posts included on this page. Every post's metadata is also
      * available.

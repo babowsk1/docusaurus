@@ -10,16 +10,19 @@ import path from 'path';
 import remark from 'remark';
 import mdx from 'remark-mdx';
 import vfile from 'to-vfile';
-import plugin from '../index';
+import plugin, {type PluginOptions} from '../index';
 import headings from '../../headings/index';
 
-const processFixture = async (name, options) => {
+const processFixture = async (
+  name: string,
+  options: Partial<PluginOptions>,
+) => {
   const filePath = path.join(__dirname, `__fixtures__/${name}.md`);
   const file = await vfile.read(filePath);
   const result = await remark()
     .use(headings)
     .use(mdx)
-    .use(plugin, {...options, filePath})
+    .use(plugin, {siteDir: __dirname, staticDirs: [], ...options})
     .process(file);
 
   return result.toString();
@@ -63,6 +66,6 @@ describe('transformImage plugin', () => {
     const errorMock = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const result = await processFixture('invalid-img', {staticDirs});
     expect(result).toMatchSnapshot();
-    expect(errorMock).toBeCalledTimes(1);
+    expect(errorMock).toHaveBeenCalledTimes(1);
   });
 });

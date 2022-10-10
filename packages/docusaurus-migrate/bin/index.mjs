@@ -8,14 +8,16 @@
 
 // @ts-check
 
+import path from 'path';
+import {createRequire} from 'module';
 import logger from '@docusaurus/logger';
 import semver from 'semver';
 import cli from 'commander';
-import path from 'path';
-import {createRequire} from 'module';
 
 const moduleRequire = createRequire(import.meta.url);
-const requiredVersion = moduleRequire('../package.json').engines.node;
+const requiredVersion = /** @type {import("../package.json")} */ (
+  moduleRequire('../package.json')
+).engines.node;
 
 if (!semver.satisfies(process.version, requiredVersion)) {
   logger.error('Minimum Node.js version not met :(');
@@ -25,26 +27,26 @@ if (!semver.satisfies(process.version, requiredVersion)) {
 
 // See https://github.com/facebook/docusaurus/pull/6860
 const {migrateDocusaurusProject, migrateMDToMDX} =
-  moduleRequire('../lib/index.js');
+  /** @type {import("../lib/index.js")} */ (moduleRequire('../lib/index.js'));
 
 cli
   .command('migrate [siteDir] [newDir]')
   .option('--mdx', 'try to migrate MD to MDX too')
   .option('--page', 'try to migrate pages too')
   .description('Migrate between versions of Docusaurus website.')
-  .action((siteDir = '.', newDir = '.', {mdx, page} = {}) => {
+  .action(async (siteDir = '.', newDir = '.', {mdx, page} = {}) => {
     const sitePath = path.resolve(siteDir);
     const newSitePath = path.resolve(newDir);
-    migrateDocusaurusProject(sitePath, newSitePath, mdx, page);
+    await migrateDocusaurusProject(sitePath, newSitePath, mdx, page);
   });
 
 cli
   .command('mdx [siteDir] [newDir]')
   .description('Migrate markdown files to MDX.')
-  .action((siteDir = '.', newDir = '.') => {
+  .action(async (siteDir = '.', newDir = '.') => {
     const sitePath = path.resolve(siteDir);
     const newSitePath = path.resolve(newDir);
-    migrateMDToMDX(sitePath, newSitePath);
+    await migrateMDToMDX(sitePath, newSitePath);
   });
 
 cli.parse(process.argv);

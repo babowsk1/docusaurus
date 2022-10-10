@@ -5,33 +5,42 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {normalizeUrl, posixPath} from '@docusaurus/utils';
-import logger from '@docusaurus/logger';
-import chokidar from 'chokidar';
-import HtmlWebpackPlugin from 'html-webpack-plugin';
+import fs from 'fs-extra';
 import path from 'path';
 import _ from 'lodash';
+import logger from '@docusaurus/logger';
+import {normalizeUrl, posixPath} from '@docusaurus/utils';
+import chokidar from 'chokidar';
+import HtmlWebpackPlugin from 'html-webpack-plugin';
 import openBrowser from 'react-dev-utils/openBrowser';
 import {prepareUrls} from 'react-dev-utils/WebpackDevServerUtils';
 import evalSourceMapMiddleware from 'react-dev-utils/evalSourceMapMiddleware';
 import webpack from 'webpack';
 import WebpackDevServer from 'webpack-dev-server';
 import merge from 'webpack-merge';
-import {load} from '../server';
-import type {StartCLIOptions} from '@docusaurus/types';
+import {load, type LoadContextOptions} from '../server';
 import createClientConfig from '../webpack/client';
 import {
   applyConfigureWebpack,
   applyConfigurePostCss,
   getHttpsConfig,
 } from '../webpack/utils';
-import {getCLIOptionHost, getCLIOptionPort} from './commandUtils';
-import {getTranslationsLocaleDirPath} from '../server/translations/translations';
+import {getHostPort, type HostPortOptions} from '../server/getHostPort';
+
+export type StartCLIOptions = HostPortOptions &
+  Pick<LoadContextOptions, 'locale' | 'config'> & {
+    hotOnly?: boolean;
+    open?: boolean;
+    poll?: boolean | number;
+    minify?: boolean;
+  };
 
 export async function start(
-  siteDir: string,
-  cliOptions: Partial<StartCLIOptions>,
+  siteDirParam: string = '.',
+  cliOptions: Partial<StartCLIOptions> = {},
 ): Promise<void> {
+  const siteDir = await fs.realpath(siteDirParam);
+
   process.env.NODE_ENV = 'development';
   process.env.BABEL_ENV = 'development';
   logger.info('Starting the development server...');
@@ -39,9 +48,9 @@ export async function start(
   function loadSite() {
     return load({
       siteDir,
-      customConfigFilePath: cliOptions.config,
+      config: cliOptions.config,
       locale: cliOptions.locale,
-      localizePath: undefined, // should this be configurable?
+      localizePath: undefined, // Should this be configurable?
     });
   }
 
@@ -50,8 +59,7 @@ export async function start(
 
   const protocol: string = process.env.HTTPS === 'true' ? 'https' : 'http';
 
-  const host: string = getCLIOptionHost(cliOptions.host);
-  const port: number | null = await getCLIOptionPort(cliOptions.port, host);
+  const {host, port} = await getHostPort(cliOptions);
 
   if (port === null) {
     process.exit();
@@ -61,7 +69,7 @@ export async function start(
   const urls = prepareUrls(protocol, host, port);
   const openUrl = normalizeUrl([urls.localUrlForBrowser, baseUrl]);
 
-  logger.success`Docusaurus website is running at url=${openUrl}.`;
+  logger.success`Docusaurus website is running at: url=${openUrl}`;
 
   // Reload files processing.
   const reload = _.debounce(() => {
@@ -69,14 +77,14 @@ export async function start(
       .then(({baseUrl: newBaseUrl}) => {
         const newOpenUrl = normalizeUrl([urls.localUrlForBrowser, newBaseUrl]);
         if (newOpenUrl !== openUrl) {
-          logger.success`Docusaurus website is running at url=${newOpenUrl}.`;
+          logger.success`Docusaurus website is running at: url=${newOpenUrl}`;
         }
       })
-      .catch((err) => {
+      .catch((err: Error) => {
         logger.error(err.stack);
       });
   }, 500);
-  const {siteConfig, plugins} = props;
+  const {siteConfig, plugins, localizationDir} = props;
 
   const normalizeToSiteDir = (filepath: string) => {
     if (filepath && path.isAbsolute(filepath)) {
@@ -90,14 +98,7 @@ export async function start(
     .filter(Boolean)
     .map(normalizeToSiteDir);
 
-  const pathsToWatch = [
-    ...pluginPaths,
-    props.siteConfigPath,
-    getTranslationsLocaleDirPath({
-      siteDir,
-      locale: props.i18n.currentLocale,
-    }),
-  ];
+  const pathsToWatch = [...pluginPaths, props.siteConfigPath, localizationDir];
 
   const pollingOptions = {
     usePolling: !!cliOptions.poll,
@@ -116,28 +117,35 @@ export async function start(
     fsWatcher.on(event, reload),
   );
 
-  let config: webpack.Configuration = merge(await createClientConfig(props), {
-    infrastructureLogging: {
-      // Reduce log verbosity, see https://github.com/facebook/docusaurus/pull/5420#issuecomment-906613105
-      level: 'warn',
+  let config: webpack.Configuration = merge(
+    await createClientConfig(props, cliOptions.minify),
+    {
+      watchOptions: {
+        ignored: /node_modules\/(?!@docusaurus)/,
+        poll: cliOptions.poll,
+      },
+      infrastructureLogging: {
+        // Reduce log verbosity, see https://github.com/facebook/docusaurus/pull/5420#issuecomment-906613105
+        level: 'warn',
+      },
+      plugins: [
+        // Generates an `index.html` file with the <script> injected.
+        new HtmlWebpackPlugin({
+          template: path.join(
+            __dirname,
+            '../webpack/templates/index.html.template.ejs',
+          ),
+          // So we can define the position where the scripts are injected.
+          inject: false,
+          filename: 'index.html',
+          title: siteConfig.title,
+          headTags,
+          preBodyTags,
+          postBodyTags,
+        }),
+      ],
     },
-    plugins: [
-      // Generates an `index.html` file with the <script> injected.
-      new HtmlWebpackPlugin({
-        template: path.join(
-          __dirname,
-          '../webpack/templates/index.html.template.ejs',
-        ),
-        // So we can define the position where the scripts are injected.
-        inject: false,
-        filename: 'index.html',
-        title: siteConfig.title,
-        headTags,
-        preBodyTags,
-        postBodyTags,
-      }),
-    ],
-  });
+  );
 
   // Plugin Lifecycle - configureWebpack and configurePostCss.
   plugins.forEach((plugin) => {
@@ -179,6 +187,10 @@ export async function start(
       overlay: {
         warnings: false,
         errors: true,
+      },
+      webSocketURL: {
+        hostname: '0.0.0.0',
+        port: 0,
       },
     },
     headers: {

@@ -7,32 +7,36 @@
 // @ts-check
 
 const path = require('path');
-const versions = require('./versions.json');
 const math = require('remark-math');
+const npm2yarn = require('@docusaurus/remark-plugin-npm2yarn');
+const versions = require('./versions.json');
 const VersionsArchived = require('./versionsArchived.json');
 const {
   dogfoodingPluginInstances,
   dogfoodingThemeInstances,
 } = require('./_dogfooding/dogfooding.config');
-const npm2yarn = require('@docusaurus/remark-plugin-npm2yarn');
 
 const ArchivedVersionsDropdownItems = Object.entries(VersionsArchived).splice(
   0,
   5,
 );
 
-// This probably only makes sense for the beta phase, temporary
-function getNextBetaVersionName() {
-  const expectedPrefix = '2.0.0-beta.';
+// This probably only makes sense for the alpha/beta/rc phase, temporary
+function getNextVersionName() {
+  return 'Canary';
+  /*
+  const expectedPrefix = '2.0.0-rc.';
 
   const lastReleasedVersion = versions[0];
-  if (!lastReleasedVersion.includes(expectedPrefix)) {
+  if (!lastReleasedVersion || !lastReleasedVersion.includes(expectedPrefix)) {
     throw new Error(
-      'this code is only meant to be used during the 2.0 beta phase.',
+      'this code is only meant to be used during the 2.0 alpha/beta/rc phase.',
     );
   }
   const version = parseInt(lastReleasedVersion.replace(expectedPrefix, ''), 10);
   return `${expectedPrefix}${version + 1}`;
+
+   */
 }
 
 const allDocHomesPaths = [
@@ -46,10 +50,14 @@ const isDev = process.env.NODE_ENV === 'development';
 const isDeployPreview =
   !!process.env.NETLIFY && process.env.CONTEXT === 'deploy-preview';
 
+// Netlify branch deploy like "docusaurus-v2"
+const isBranchDeploy =
+  !!process.env.NETLIFY && process.env.CONTEXT === 'branch-deploy';
+
 // Used to debug production build issues faster
 const isBuildFast = !!process.env.BUILD_FAST;
 
-const baseUrl = process.env.BASE_URL || '/';
+const baseUrl = process.env.BASE_URL ?? '/';
 
 // Special deployment for staging locales until they get enough translations
 // https://app.netlify.com/sites/docusaurus-i18n-staging
@@ -82,30 +90,31 @@ const config = {
   ],
   i18n: {
     defaultLocale: 'en',
-    // eslint-disable-next-line no-nested-ternary
-    locales: isDeployPreview
-      ? // Deploy preview: keep it fast!
-        ['en']
-      : isI18nStaging
-      ? // Staging locales: https://docusaurus-i18n-staging.netlify.app/
-        ['en', 'ja']
-      : // Production locales
-        ['en', 'fr', 'pt-BR', 'ko', 'zh-CN'],
+
+    locales:
+      isDeployPreview || isBranchDeploy
+        ? // Deploy preview and branch deploys: keep them fast!
+          ['en']
+        : isI18nStaging
+        ? // Staging locales: https://docusaurus-i18n-staging.netlify.app/
+          ['en', 'ja']
+        : // Production locales
+          ['en', 'fr', 'pt-BR', 'ko', 'zh-CN'],
   },
   webpack: {
     jsLoader: (isServer) => ({
       loader: require.resolve('swc-loader'),
       options: {
         jsc: {
-          "parser": {
-            "syntax": "typescript",
-            "tsx": true
+          parser: {
+            syntax: 'typescript',
+            tsx: true,
           },
           target: 'es2017',
         },
         module: {
           type: isServer ? 'commonjs' : 'es6',
-        }
+        },
       },
     }),
   },
@@ -113,12 +122,16 @@ const config = {
   onBrokenMarkdownLinks: 'warn',
   favicon: 'img/docusaurus.ico',
   customFields: {
+    isDeployPreview,
     description:
       'An optimized site generator in React. Docusaurus helps you to move fast and write content. Build documentation websites, blogs, marketing pages, and more.',
   },
   staticDirectories: [
     'static',
     path.join(__dirname, '_dogfooding/_asset-tests'),
+    // Adding a non-existent static directory. If user deleted `static` without
+    // specifying `staticDirectories: []`, build should still work
+    path.join(__dirname, '_dogfooding/non-existent'),
   ],
   themes: ['live-codeblock', ...dogfoodingThemeInstances],
   plugins: [
@@ -158,6 +171,7 @@ const config = {
           }
           return `https://github.com/facebook/docusaurus/edit/main/website/${versionDocsDirPath}/${docPath}`;
         },
+        remarkPlugins: [npm2yarn],
         editCurrentVersion: true,
         sidebarPath: require.resolve('./sidebarsCommunity.js'),
         showLastUpdateAuthor: true,
@@ -170,8 +184,8 @@ const config = {
       ({
         fromExtensions: ['html'],
         createRedirects(routePath) {
-          // redirect to /docs from /docs/introduction,
-          // as introduction has been made the home doc
+          // Redirect to /docs from /docs/introduction, as introduction has been
+          // made the home doc
           if (allDocHomesPaths.includes(routePath)) {
             return [`${routePath}/introduction`];
           }
@@ -195,13 +209,15 @@ const config = {
     ],
     [
       'ideal-image',
-      {
+      /** @type {import('@docusaurus/plugin-ideal-image').PluginOptions} */
+      ({
         quality: 70,
-        max: 1030, // max resized image's size.
-        min: 640, // min resized image's size. if original is lower, use that size.
-        steps: 2, // the max number of images generated between min and max (inclusive)
-        // disableInDev: false,
-      },
+        max: 1030,
+        min: 640,
+        steps: 2,
+        // Use false to debug, but it incurs huge perf costs
+        disableInDev: true,
+      }),
     ],
     [
       'pwa',
@@ -287,23 +303,31 @@ const config = {
             const nextVersionDocsDirPath = 'docs';
             return `https://github.com/facebook/docusaurus/edit/main/website/${nextVersionDocsDirPath}/${docPath}`;
           },
+          admonitions: {
+            keywords: ['my-custom-admonition'],
+            extendDefaults: true,
+          },
           showLastUpdateAuthor: true,
           showLastUpdateTime: true,
           remarkPlugins: [math, [npm2yarn, {sync: true}]],
           rehypePlugins: [],
           disableVersioning: isVersioningDisabled,
-          lastVersion: isDev || isDeployPreview ? 'current' : undefined,
+          lastVersion:
+            isDev || isDeployPreview || isBranchDeploy ? 'current' : undefined,
           onlyIncludeVersions: (() => {
             if (isBuildFast) {
               return ['current'];
-            } else if (!isVersioningDisabled && (isDev || isDeployPreview)) {
+            } else if (
+              !isVersioningDisabled &&
+              (isDev || isDeployPreview || isBranchDeploy)
+            ) {
               return ['current', ...versions.slice(0, 2)];
             }
             return undefined;
           })(),
           versions: {
             current: {
-              label: `${getNextBetaVersionName()} 🚧`,
+              label: `${getNextVersionName()} 🚧`,
             },
           },
         },
@@ -330,16 +354,18 @@ const config = {
         theme: {
           customCss: [
             require.resolve('./src/css/custom.css'),
-            require.resolve('./_dogfooding/dogfooding.css'),
+            // relative paths are relative to site dir
+            './_dogfooding/dogfooding.css',
           ],
         },
-        gtag: !isDeployPreview
+        gtag: !(isDeployPreview || isBranchDeploy)
           ? {
               trackingID: 'UA-141789564-1',
             }
           : undefined,
         sitemap: {
-          ignorePatterns: ['/tests/**'],
+          // Note: /tests/docs already has noIndex: true
+          ignorePatterns: ['/tests/{blog,pages}/**'],
         },
       }),
     ],
@@ -351,8 +377,12 @@ const config = {
       liveCodeBlock: {
         playgroundPosition: 'bottom',
       },
-      hideableSidebar: true,
-      autoCollapseSidebarCategories: true,
+      docs: {
+        sidebar: {
+          hideable: true,
+          autoCollapseCategories: true,
+        },
+      },
       colorMode: {
         defaultMode: 'light',
         disableSwitch: false,
@@ -363,11 +393,18 @@ const config = {
         content: `⭐️ If you like Docusaurus, give it a star on <a target="_blank" rel="noopener noreferrer" href="https://github.com/facebook/docusaurus">GitHub</a> and follow us on <a target="_blank" rel="noopener noreferrer" href="https://twitter.com/docusaurus">Twitter ${TwitterSvg}</a>`,
       },
       prism: {
-        // We need to load markdown again so that YAML is loaded before MD
-        // and the YAML front matter is highlighted correctly.
-        // TODO after we have forked prism-react-renderer, we should tweak the
-        // import order and fix it there
-        additionalLanguages: ['java', 'markdown', 'latex'],
+        additionalLanguages: ['java', 'latex'],
+        magicComments: [
+          {
+            className: 'theme-code-block-highlighted-line',
+            line: 'highlight-next-line',
+            block: {start: 'highlight-start', end: 'highlight-end'},
+          },
+          {
+            className: 'code-block-error-line',
+            line: 'This will error',
+          },
+        ],
       },
       image: 'img/docusaurus-soc.png',
       // metadata: [{name: 'twitter:card', content: 'summary'}],
@@ -380,7 +417,7 @@ const config = {
         hideOnScroll: true,
         title: 'Docusaurus',
         logo: {
-          alt: 'Docusaurus Logo',
+          alt: '',
           src: 'img/docusaurus.svg',
           srcDark: 'img/docusaurus_keytar.svg',
           width: 32,
@@ -407,12 +444,33 @@ const config = {
             position: 'left',
             activeBaseRegex: `/community/`,
           },
-          // right
+          // This item links to a draft doc: only displayed in dev
+          {
+            type: 'doc',
+            docId: 'test-draft',
+            label: 'Tests',
+            docsPluginId: 'docs-tests',
+          },
+          // Custom item for dogfooding: only displayed in /tests/ routes
+          {
+            type: 'custom-dogfood-navbar-item',
+            content: '😉',
+          },
+          // Right
           {
             type: 'docsVersionDropdown',
             position: 'right',
             dropdownActiveClassDisabled: true,
             dropdownItemsAfter: [
+              {
+                type: 'html',
+                value: '<hr class="dropdown-separator">',
+              },
+              {
+                type: 'html',
+                className: 'dropdown-archived-versions',
+                value: '<b>Archived versions</b>',
+              },
               ...ArchivedVersionsDropdownItems.map(
                 ([versionName, versionUrl]) => ({
                   label: versionName,
@@ -424,6 +482,10 @@ const config = {
                 label: '1.x.x',
               },
               {
+                type: 'html',
+                value: '<hr class="dropdown-separator">',
+              },
+              {
                 to: '/versions',
                 label: 'All versions',
               },
@@ -433,6 +495,10 @@ const config = {
             type: 'localeDropdown',
             position: 'right',
             dropdownItemsAfter: [
+              {
+                type: 'html',
+                value: '<hr style="margin: 0.3rem 0;">',
+              },
               {
                 href: 'https://github.com/facebook/docusaurus/issues/3526',
                 label: 'Help Us Translate',
@@ -541,13 +607,11 @@ const config = {
           },
         ],
         logo: {
-          alt: 'Facebook Open Source Logo',
-          src: 'img/oss_logo.png',
-          width: 160,
-          height: 51,
-          href: 'https://opensource.facebook.com',
+          alt: 'Meta Open Source Logo',
+          src: '/img/meta_opensource_logo_negative.svg',
+          href: 'https://opensource.fb.com',
         },
-        copyright: `Copyright © ${new Date().getFullYear()} Facebook, Inc. Built with Docusaurus.`,
+        copyright: `Copyright © ${new Date().getFullYear()} Meta Platforms, Inc. Built with Docusaurus.`,
       },
     }),
 };

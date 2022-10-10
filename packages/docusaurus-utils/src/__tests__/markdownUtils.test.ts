@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import dedent from 'dedent';
 import {
   createExcerpt,
   parseMarkdownContentTitle,
@@ -12,7 +13,6 @@ import {
   parseMarkdownHeadingId,
   writeMarkdownHeadingId,
 } from '../markdownUtils';
-import dedent from 'dedent';
 
 describe('createExcerpt', () => {
   it('creates excerpt for text-only content', () => {
@@ -38,7 +38,7 @@ describe('createExcerpt', () => {
           Nunc porttitor libero nec vulputate venenatis. Nam nec rhoncus mauris. Morbi tempus est et nibh maximus, tempus venenatis arcu lobortis.
         `),
     ).toBe(
-      // h1 title is skipped on purpose, because we don't want the page to have
+      // H1 title is skipped on purpose, because we don't want the page to have
       // SEO metadata title === description
       'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum ex urna, molestie et sagittis ut, varius ac justo.',
     );
@@ -56,7 +56,7 @@ describe('createExcerpt', () => {
           Nunc porttitor libero nec vulputate venenatis. Nam nec rhoncus mauris. Morbi tempus est et nibh maximus, tempus venenatis arcu lobortis.
         `),
     ).toBe(
-      // h1 title is skipped on purpose, because we don't want the page to have
+      // H1 title is skipped on purpose, because we don't want the page to have
       // SEO metadata title === description
       'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum ex urna, molestie et sagittis ut, varius ac justo.',
     );
@@ -377,7 +377,7 @@ Lorem Ipsum
 
         `;
 
-    // remove the useless line breaks? Does not matter too much
+    // Remove the useless line breaks? Does not matter too much
     expect(parseMarkdownContentTitle(markdown)).toEqual({
       content: markdown,
       contentTitle: 'Markdown Title',
@@ -831,6 +831,53 @@ describe('parseMarkdownHeadingId', () => {
     expect(parseMarkdownHeadingId('## {#id}')).toEqual({
       text: '##',
       id: 'id',
+    });
+  });
+
+  it('does not parse empty id', () => {
+    expect(parseMarkdownHeadingId('## a {#}')).toEqual({
+      text: '## a {#}',
+      id: undefined,
+    });
+  });
+
+  it('can parse id with more characters', () => {
+    expect(parseMarkdownHeadingId('## a {#你好}')).toEqual({
+      text: '## a',
+      id: '你好',
+    });
+
+    expect(parseMarkdownHeadingId('## a {#2022.1.1}')).toEqual({
+      text: '## a',
+      id: '2022.1.1',
+    });
+
+    expect(parseMarkdownHeadingId('## a {#a#b}')).toEqual({
+      text: '## a',
+      id: 'a#b',
+    });
+  });
+
+  // The actual behavior is unspecified, just need to ensure it stays consistent
+  it('handles unmatched boundaries', () => {
+    expect(parseMarkdownHeadingId('## a {# a {#bcd}')).toEqual({
+      text: '## a {# a',
+      id: 'bcd',
+    });
+
+    expect(parseMarkdownHeadingId('## a {#bcd}}')).toEqual({
+      text: '## a {#bcd}}',
+      id: undefined,
+    });
+
+    expect(parseMarkdownHeadingId('## a {#b{cd}')).toEqual({
+      text: '## a',
+      id: 'b{cd',
+    });
+
+    expect(parseMarkdownHeadingId('## a {#b{#b}')).toEqual({
+      text: '## a {#b',
+      id: 'b',
     });
   });
 });
